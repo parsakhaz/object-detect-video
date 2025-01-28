@@ -1,10 +1,11 @@
-# Moondream Video Ad Detector
+# Moondream Video Object Detector
 
-This tool automatically detects and highlights advertisements in videos using the Moondream2 vision-language model. It processes videos frame by frame and draws bounding boxes around detected advertisements.
+This tool automatically detects and highlights objects in videos using the Moondream2 vision-language model. While originally designed for advertisement detection, it now supports detecting any object type that Moondream2 can recognize.
 
 ## Features
 
-- Real-time advertisement detection in videos
+- Real-time object detection in videos
+- Flexible object type detection (advertisements, people, cars, etc.)
 - Temporal smoothing for stable bounding boxes
 - Frame-by-frame processing with IoU tracking
 - Batch processing of multiple videos
@@ -64,14 +65,27 @@ python main.py --preset ultrafast  # Fastest, lower quality
 python main.py --preset veryslow   # Slowest, highest quality
 ```
 
+- `--detect`: Specify what object type to detect (defaults to "advertisement")
+```bash
+python main.py --detect person     # Detect people
+python main.py --detect car        # Detect cars
+python main.py --detect dog        # Detect dogs
+python main.py                     # Detect advertisements (default)
+```
+
+You can combine arguments:
+```bash
+python main.py --detect person --test --preset fast
+```
+
 ## Detection Parameters
 
-The script uses several parameters for optimal ad detection:
+The script uses several parameters for optimal object detection:
 
-- Frame Processing: Every frame is analyzed for advertisements
+- Frame Processing: Every frame is analyzed for the specified object
 - IoU Threshold: 0.5 (standard threshold for box matching)
-- EMA Smoothing: Alpha = 0.3 (balance between smoothness and responsiveness)
-- Temporal Window: 5 frames (for smoothing box movements)
+- EMA Smoothing: Alpha = 0.6 (more responsive to changes)
+- Temporal Window: 3 frames (for smoothing box movements)
 - Full-screen Filter: Ignores detections covering >98% of both dimensions
 
 ## Output
@@ -81,8 +95,8 @@ Processed videos will be saved in the `outputs` directory with the format:
 
 The output videos will include:
 - Original video content
-- Red bounding boxes around detected advertisements
-- Box labels showing "Advertisement"
+- Red bounding boxes around detected objects
+- Box labels showing the detected object type
 - Temporally smoothed detections
 - Web-compatible H.264 encoding
 
@@ -91,5 +105,6 @@ The output videos will include:
 - Processing time depends on video length and GPU availability
 - GPU is strongly recommended for faster processing
 - Requires sufficient disk space for temporary files
-- Detection quality may vary based on advertisement type and video quality
-- Temporal smoothing helps reduce jitter in bounding boxes 
+- Detection quality may vary based on object type and video quality
+- Temporal smoothing helps reduce jitter in bounding boxes while maintaining responsiveness
+- Detection accuracy depends on Moondream2's ability to recognize the specified object type 

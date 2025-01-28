@@ -17,7 +17,6 @@ TEST_MODE_DURATION = 3  # Process only first 3 seconds in test mode
 FFMPEG_PRESETS = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow']
 
 # Detection parameters
-DETECT_KEYWORD = "advertisement"
 IOU_THRESHOLD = 0.5  # IoU threshold for considering boxes related
 EMA_ALPHA = 0.6     # Increased alpha for more immediate response
 TEMPORAL_WINDOW = 3  # Reduced to only look at last 3 frames
@@ -90,23 +89,23 @@ def is_valid_box(box):
     # (i.e., full-screen detections)
     return not (width > 0.98 and height > 0.98)
 
-def detect_ads_in_frame(model, tokenizer, image, previous_detections=None):
-    """Detect marketing content in a frame."""
-    detected_ads = []
+def detect_ads_in_frame(model, tokenizer, image, detect_keyword, previous_detections=None):
+    """Detect objects in a frame."""
+    detected_objects = []
     
     # Convert numpy array to PIL Image if needed
     if not isinstance(image, Image.Image):
         image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
     
-    # Detect marketing objects
-    response = model.detect(image, DETECT_KEYWORD)
-    print(f"\nDetection response for '{DETECT_KEYWORD}':")
+    # Detect objects
+    response = model.detect(image, detect_keyword)
+    print(f"\nDetection response for '{detect_keyword}':")
     print(response)
     
     # Check if we have valid objects
     if response and "objects" in response and response["objects"]:
         objects = response["objects"]
-        print(f"Found {len(objects)} potential marketing region(s)")
+        print(f"Found {len(objects)} potential {detect_keyword} region(s)")
         
         has_valid_detection = False
         for obj in objects:
@@ -119,7 +118,7 @@ def detect_ads_in_frame(model, tokenizer, image, previous_detections=None):
                 ]
                 # If box is valid (not full-frame), add it
                 if is_valid_box(box):
-                    detected_ads.append((box, DETECT_KEYWORD))
+                    detected_objects.append((box, detect_keyword))
                     has_valid_detection = True
                     print(f"Added valid detection: {box}")
         
@@ -132,13 +131,13 @@ def detect_ads_in_frame(model, tokenizer, image, previous_detections=None):
         print("Using previous frame's detections due to no results")
         return previous_detections
     
-    return detected_ads
+    return detected_objects
 
-def draw_ad_boxes(frame, detected_ads):
-    """Draw bounding boxes around detected marketing content."""
+def draw_ad_boxes(frame, detected_objects, detect_keyword):
+    """Draw bounding boxes around detected objects."""
     height, width = frame.shape[:2]
     
-    for (box, keyword) in detected_ads:
+    for (box, keyword) in detected_objects:
         try:
             # Convert normalized coordinates to pixel coordinates
             x1 = int(box[0] * width)
@@ -158,7 +157,7 @@ def draw_ad_boxes(frame, detected_ads):
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
                 
                 # Add label
-                label = "Advertisement"  # Use the actual keyword
+                label = detect_keyword.capitalize()
                 label_size = cv2.getTextSize(label, FONT, 0.7, 2)[0]
                 cv2.rectangle(frame, (x1, y1-25), (x1 + label_size[0], y1), (0, 0, 255), -1)
                 cv2.putText(frame, label, (x1, y1-6), FONT, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
@@ -242,8 +241,8 @@ def smooth_detections(current_frame, detections_history):
     
     return smoothed_detections
 
-def describe_frames(video_path, model, tokenizer, test_mode=False):
-    """Extract and detect ads in frames."""
+def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=False):
+    """Extract and detect objects in frames."""
     props = get_video_properties(video_path)
     fps = props['fps']
     
@@ -253,11 +252,11 @@ def describe_frames(video_path, model, tokenizer, test_mode=False):
     else:
         frame_count = props['frame_count']
     
-    ad_detections = {}  # Store ad detection results by timestamp
+    ad_detections = {}  # Store detection results by timestamp
     detections_history = []  # Store recent detections for smoothing
     previous_detections = None  # Keep track of last valid detection
     
-    print("Extracting frames and detecting ads...")
+    print("Extracting frames and detecting objects...")
     video = cv2.VideoCapture(video_path)
     
     # Process every frame
@@ -271,17 +270,17 @@ def describe_frames(video_path, model, tokenizer, test_mode=False):
             # Calculate exact timestamp for this frame
             timestamp = frame_count_processed / fps
             
-            # Detect ads in the frame
-            detected_ads = detect_ads_in_frame(model, tokenizer, frame, previous_detections)
+            # Detect objects in the frame
+            detected_objects = detect_ads_in_frame(model, tokenizer, frame, detect_keyword, previous_detections)
             
             # Apply temporal smoothing
-            if detected_ads:
-                smoothed_ads = smooth_detections(detected_ads, detections_history)
-                ad_detections[timestamp] = smoothed_ads
-                detections_history.append(smoothed_ads)
-                previous_detections = smoothed_ads
+            if detected_objects:
+                smoothed_objects = smooth_detections(detected_objects, detections_history)
+                ad_detections[timestamp] = smoothed_objects
+                detections_history.append(smoothed_objects)
+                previous_detections = smoothed_objects
                 print(f"\nFrame {frame_count_processed} (t={timestamp:.3f}s) detections:")
-                for box, keyword in smoothed_ads:
+                for box, keyword in smoothed_objects:
                     print(f"- {keyword}: {box}")
             else:
                 detections_history.append([])
@@ -301,8 +300,8 @@ def describe_frames(video_path, model, tokenizer, test_mode=False):
     
     return ad_detections
 
-def create_detection_video(video_path, ad_detections, output_path=None, ffmpeg_preset='medium', test_mode=False):
-    """Create video with ad detection boxes only."""
+def create_detection_video(video_path, ad_detections, detect_keyword, output_path=None, ffmpeg_preset='medium', test_mode=False):
+    """Create video with detection boxes."""
     if output_path is None:
         os.makedirs('outputs', exist_ok=True)
         base_name = os.path.splitext(os.path.basename(video_path))[0]
@@ -353,7 +352,7 @@ def create_detection_video(video_path, ad_detections, output_path=None, ffmpeg_p
             
             if current_detections:
                 print(f"Drawing detections for frame {frame_count_processed} (t={timestamp:.3f}s)")
-                frame = draw_ad_boxes(frame, current_detections)
+                frame = draw_ad_boxes(frame, current_detections, detect_keyword)
             
             out.write(frame)
             frame_count_processed += 1
@@ -377,27 +376,30 @@ def create_detection_video(video_path, ad_detections, output_path=None, ffmpeg_p
     os.remove(temp_output)  # Remove the temporary file
     return output_path
 
-def process_video(video_path, test_mode=False, ffmpeg_preset='medium'):
+def process_video(video_path, detect_keyword, test_mode=False, ffmpeg_preset='medium'):
     """Process a single video file."""
     print(f"\nProcessing: {video_path}")
+    print(f"Looking for: {detect_keyword}")
     
     # Load model
     print("Loading Moondream model...")
     model, tokenizer = load_moondream()
     
-    # Process video - detect ads
-    ad_detections = describe_frames(video_path, model, tokenizer, test_mode)
+    # Process video - detect objects
+    ad_detections = describe_frames(video_path, model, tokenizer, detect_keyword, test_mode)
     
     # Create video with detection boxes
-    output_path = create_detection_video(video_path, ad_detections, ffmpeg_preset=ffmpeg_preset, test_mode=test_mode)
+    output_path = create_detection_video(video_path, ad_detections, detect_keyword, ffmpeg_preset=ffmpeg_preset, test_mode=test_mode)
     print(f"\nOutput saved to: {output_path}")
 
 def main():
     """Process all videos in the inputs directory."""
-    parser = argparse.ArgumentParser(description='Generate captions for videos using Moondream2')
+    parser = argparse.ArgumentParser(description='Detect objects in videos using Moondream2')
     parser.add_argument('--test', action='store_true', help='Process only first 3 seconds of each video')
     parser.add_argument('--preset', choices=FFMPEG_PRESETS, default='medium',
                       help='FFmpeg encoding preset (default: medium). Faster presets = lower quality')
+    parser.add_argument('--detect', type=str, default='face',
+                      help='Object to detect in the video (default: face, use --detect "thing to detect" to override)')
     args = parser.parse_args()
     
     input_dir = 'inputs'
@@ -413,13 +415,14 @@ def main():
         return
     
     print(f"Found {len(video_files)} videos to process")
+    print(f"Will detect: {args.detect}")
     if args.test:
         print("Running in test mode - processing only first 3 seconds of each video")
     print(f"Using FFmpeg preset: {args.preset}")
     
     for video_file in video_files:
         video_path = os.path.join(input_dir, video_file)
-        process_video(video_path, test_mode=args.test, ffmpeg_preset=args.preset)
+        process_video(video_path, args.detect, test_mode=args.test, ffmpeg_preset=args.preset)
 
 if __name__ == "__main__":
     main()
