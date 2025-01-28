@@ -4,6 +4,7 @@ from PIL import Image
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
+import numpy as np
 
 # Constants
 FRAME_INTERVAL = 1  # Process every frame
@@ -89,8 +90,178 @@ def is_valid_box(box):
     # (i.e., full-screen detections)
     return not (width > 0.98 and height > 0.98)
 
-def detect_ads_in_frame(model, tokenizer, image, detect_keyword, previous_detections=None):
-    """Detect objects in a frame."""
+def split_frame_into_tiles(frame, rows, cols):
+    """Split a frame into a grid of tiles."""
+    height, width = frame.shape[:2]
+    tile_height = height // rows
+    tile_width = width // cols
+    tiles = []
+    tile_positions = []
+    
+    for i in range(rows):
+        for j in range(cols):
+            y1 = i * tile_height
+            y2 = (i + 1) * tile_height if i < rows - 1 else height
+            x1 = j * tile_width
+            x2 = (j + 1) * tile_width if j < cols - 1 else width
+            
+            tile = frame[y1:y2, x1:x2]
+            tiles.append(tile)
+            tile_positions.append((x1, y1, x2, y2))
+    
+    return tiles, tile_positions
+
+def convert_tile_coords_to_frame(box, tile_pos, frame_shape):
+    """Convert coordinates from tile space to frame space.
+    
+    Args:
+        box: List [x1, y1, x2, y2] normalized coordinates in tile space (0-1)
+        tile_pos: Tuple (x1, y1, x2, y2) absolute pixel coordinates of tile in frame
+        frame_shape: Tuple (height, width) of original frame
+    
+    Returns:
+        List [x1, y1, x2, y2] normalized coordinates in frame space (0-1)
+    """
+    # 1. Get tile and frame dimensions
+    frame_height, frame_width = frame_shape[:2]
+    tile_x1, tile_y1, tile_x2, tile_y2 = tile_pos
+    tile_width = tile_x2 - tile_x1
+    tile_height = tile_y2 - tile_y1
+    
+    # 2. Convert normalized tile coordinates (0-1) to absolute tile coordinates
+    x1_tile_abs = box[0] * tile_width
+    y1_tile_abs = box[1] * tile_height
+    x2_tile_abs = box[2] * tile_width
+    y2_tile_abs = box[3] * tile_height
+    
+    # 3. Convert absolute tile coordinates to absolute frame coordinates
+    x1_frame_abs = tile_x1 + x1_tile_abs
+    y1_frame_abs = tile_y1 + y1_tile_abs
+    x2_frame_abs = tile_x1 + x2_tile_abs
+    y2_frame_abs = tile_y1 + y2_tile_abs
+    
+    # 4. Normalize to frame coordinates (0-1)
+    x1_norm = x1_frame_abs / frame_width
+    y1_norm = y1_frame_abs / frame_height
+    x2_norm = x2_frame_abs / frame_width
+    y2_norm = y2_frame_abs / frame_height
+    
+    # 5. Ensure coordinates are within bounds
+    x1_norm = max(0.0, min(1.0, x1_norm))
+    y1_norm = max(0.0, min(1.0, y1_norm))
+    x2_norm = max(0.0, min(1.0, x2_norm))
+    y2_norm = max(0.0, min(1.0, y2_norm))
+    
+    return [x1_norm, y1_norm, x2_norm, y2_norm]
+
+def merge_tile_detections(tile_detections, iou_threshold=0.5):
+    """Merge detections from different tiles using NMS-like approach."""
+    if not tile_detections:
+        return []
+    
+    all_boxes = []
+    all_keywords = []
+    
+    # Collect all boxes and their keywords
+    for detections in tile_detections:
+        for box, keyword in detections:
+            all_boxes.append(box)
+            all_keywords.append(keyword)
+    
+    if not all_boxes:
+        return []
+    
+    # Convert to numpy for easier processing
+    boxes = np.array(all_boxes)
+    
+    # Calculate areas
+    x1 = boxes[:, 0]
+    y1 = boxes[:, 1]
+    x2 = boxes[:, 2]
+    y2 = boxes[:, 3]
+    areas = (x2 - x1) * (y2 - y1)
+    
+    # Sort boxes by area
+    order = areas.argsort()[::-1]
+    
+    keep = []
+    while order.size > 0:
+        i = order[0]
+        keep.append(i)
+        
+        if order.size == 1:
+            break
+            
+        # Calculate IoU with rest of boxes
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+        
+        w = np.maximum(0.0, xx2 - xx1)
+        h = np.maximum(0.0, yy2 - yy1)
+        inter = w * h
+        
+        ovr = inter / (areas[i] + areas[order[1:]] - inter)
+        
+        # Get indices of boxes with IoU less than threshold
+        inds = np.where(ovr <= iou_threshold)[0]
+        order = order[inds + 1]
+    
+    return [(all_boxes[i], all_keywords[i]) for i in keep]
+
+def detect_ads_in_frame(model, tokenizer, image, detect_keyword, previous_detections=None, rows=1, cols=1):
+    """Detect objects in a frame using grid-based detection."""
+    if rows == 1 and cols == 1:
+        return detect_ads_in_frame_single(model, tokenizer, image, detect_keyword, previous_detections)
+    
+    # Convert numpy array to PIL Image if needed
+    if not isinstance(image, Image.Image):
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    
+    # Split frame into tiles
+    tiles, tile_positions = split_frame_into_tiles(image, rows, cols)
+    
+    # Process each tile
+    tile_detections = []
+    for tile, tile_pos in zip(tiles, tile_positions):
+        # Convert tile to PIL Image
+        tile_pil = Image.fromarray(tile)
+        
+        # Detect objects in tile
+        response = model.detect(tile_pil, detect_keyword)
+        
+        if response and "objects" in response and response["objects"]:
+            objects = response["objects"]
+            tile_objects = []
+            
+            for obj in objects:
+                if all(k in obj for k in ['x_min', 'y_min', 'x_max', 'y_max']):
+                    box = [
+                        obj['x_min'],
+                        obj['y_min'],
+                        obj['x_max'],
+                        obj['y_max']
+                    ]
+                    
+                    if is_valid_box(box):
+                        # Convert tile coordinates to frame coordinates
+                        frame_box = convert_tile_coords_to_frame(box, tile_pos, image.shape)
+                        tile_objects.append((frame_box, detect_keyword))
+            
+            if tile_objects:  # Only append if we found valid objects
+                tile_detections.append(tile_objects)
+    
+    # Merge detections from all tiles
+    merged_detections = merge_tile_detections(tile_detections)
+    
+    if not merged_detections and previous_detections:
+        return previous_detections
+    
+    return merged_detections
+
+def detect_ads_in_frame_single(model, tokenizer, image, detect_keyword, previous_detections=None):
+    """Original single-frame detection function."""
     detected_objects = []
     
     # Convert numpy array to PIL Image if needed
@@ -241,7 +412,7 @@ def smooth_detections(current_frame, detections_history):
     
     return smoothed_detections
 
-def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=False):
+def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=False, rows=1, cols=1):
     """Extract and detect objects in frames."""
     props = get_video_properties(video_path)
     fps = props['fps']
@@ -271,7 +442,8 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
             timestamp = frame_count_processed / fps
             
             # Detect objects in the frame
-            detected_objects = detect_ads_in_frame(model, tokenizer, frame, detect_keyword, previous_detections)
+            detected_objects = detect_ads_in_frame(model, tokenizer, frame, detect_keyword, 
+                                                previous_detections, rows=rows, cols=cols)
             
             # Apply temporal smoothing
             if detected_objects:
@@ -376,7 +548,7 @@ def create_detection_video(video_path, ad_detections, detect_keyword, output_pat
     os.remove(temp_output)  # Remove the temporary file
     return output_path
 
-def process_video(video_path, detect_keyword, test_mode=False, ffmpeg_preset='medium'):
+def process_video(video_path, detect_keyword, test_mode=False, ffmpeg_preset='medium', rows=1, cols=1):
     """Process a single video file."""
     print(f"\nProcessing: {video_path}")
     print(f"Looking for: {detect_keyword}")
@@ -386,7 +558,7 @@ def process_video(video_path, detect_keyword, test_mode=False, ffmpeg_preset='me
     model, tokenizer = load_moondream()
     
     # Process video - detect objects
-    ad_detections = describe_frames(video_path, model, tokenizer, detect_keyword, test_mode)
+    ad_detections = describe_frames(video_path, model, tokenizer, detect_keyword, test_mode, rows, cols)
     
     # Create video with detection boxes
     output_path = create_detection_video(video_path, ad_detections, detect_keyword, ffmpeg_preset=ffmpeg_preset, test_mode=test_mode)
@@ -400,6 +572,10 @@ def main():
                       help='FFmpeg encoding preset (default: medium). Faster presets = lower quality')
     parser.add_argument('--detect', type=str, default='face',
                       help='Object to detect in the video (default: face, use --detect "thing to detect" to override)')
+    parser.add_argument('--rows', type=int, default=1,
+                      help='Number of rows to split each frame into (default: 1)')
+    parser.add_argument('--cols', type=int, default=1,
+                      help='Number of columns to split each frame into (default: 1)')
     args = parser.parse_args()
     
     input_dir = 'inputs'
@@ -419,10 +595,12 @@ def main():
     if args.test:
         print("Running in test mode - processing only first 3 seconds of each video")
     print(f"Using FFmpeg preset: {args.preset}")
+    print(f"Grid size: {args.rows}x{args.cols}")
     
     for video_file in video_files:
         video_path = os.path.join(input_dir, video_file)
-        process_video(video_path, args.detect, test_mode=args.test, ffmpeg_preset=args.preset)
+        process_video(video_path, args.detect, test_mode=args.test, ffmpeg_preset=args.preset,
+                     rows=args.rows, cols=args.cols)
 
 if __name__ == "__main__":
     main()
