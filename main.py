@@ -19,10 +19,8 @@ FFMPEG_PRESETS = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'mediu
 # Detection parameters
 DETECT_KEYWORD = "advertisement"
 IOU_THRESHOLD = 0.5  # IoU threshold for considering boxes related
-EMA_ALPHA = 0.2     # Lower alpha for smoother transitions
-TEMPORAL_WINDOW = 7  # Increased window for better smoothing
-MIN_DETECTION_FRAMES = 3  # Minimum consecutive frames needed to confirm a detection
-OUTLIER_THRESHOLD = 0.4  # Maximum allowed sudden change in box coordinates
+EMA_ALPHA = 0.6     # Increased alpha for more immediate response
+TEMPORAL_WINDOW = 3  # Reduced to only look at last 3 frames
 
 def load_moondream():
     """Load Moondream model and tokenizer."""
@@ -194,85 +192,68 @@ def calculate_iou(box1, box2):
     
     return intersection / union if union > 0 else 0.0
 
-def is_stable_detection(box, recent_detections):
-    """Check if a detection is stable across multiple frames."""
-    if not recent_detections:
-        return False
-        
-    # Count how many recent frames have a similar box
-    similar_boxes = 0
-    for frame_detections in recent_detections:
-        for past_box, _ in frame_detections:
-            if calculate_iou(box, past_box) > IOU_THRESHOLD:
-                similar_boxes += 1
-                break
-    
-    # Require detection to be present in minimum number of recent frames
-    return similar_boxes >= MIN_DETECTION_FRAMES
-
-def is_smooth_transition(current_box, previous_box):
-    """Check if the transition between boxes is smooth enough."""
-    if not previous_box:
-        return True
-        
-    # Check each coordinate for sudden changes
-    for curr, prev in zip(current_box, previous_box):
-        if abs(curr - prev) > OUTLIER_THRESHOLD:
-            return False
-    return True
-
 def smooth_detections(current_frame, detections_history):
     """Apply temporal smoothing to detections using EMA and IoU matching."""
     if not detections_history:
         return current_frame
     
-    # Get recent frames' detections
-    recent_detections = detections_history[-TEMPORAL_WINDOW:]
+    # Get recent frames' detections - only look at last 2 frames for smoothing
+    recent_detections = detections_history[-2:]  # More responsive
     
     smoothed_detections = []
     for current_box, keyword in current_frame:
-        # Only process if detection is stable across multiple frames
-        if is_stable_detection(current_box, recent_detections):
-            matched_boxes = []
-            previous_smoothed = None
-            
-            # Find related boxes in recent frames
-            for frame_detections in reversed(recent_detections):  # Process most recent first
-                for past_box, _ in frame_detections:
-                    if calculate_iou(current_box, past_box) > IOU_THRESHOLD:
-                        matched_boxes.append(past_box)
-                        if not previous_smoothed:
-                            previous_smoothed = past_box
-                        break
-            
-            if matched_boxes:
-                # Check if transition is smooth
-                smoothed_box = list(current_box)
-                if previous_smoothed and is_smooth_transition(current_box, previous_smoothed):
-                    # Apply EMA smoothing with more weight to history
-                    for i in range(4):
-                        smoothed_box[i] = (EMA_ALPHA * current_box[i] + 
-                                         (1 - EMA_ALPHA) * previous_smoothed[i])
-                    
+        matched_boxes = []
+        
+        # Find related boxes in recent frames, with their recency index
+        for i, frame_detections in enumerate(recent_detections):
+            for past_box, _ in frame_detections:
+                iou = calculate_iou(current_box, past_box)
+                if iou > IOU_THRESHOLD:
+                    # Store box with its recency weight (more recent = higher weight)
+                    recency_weight = 0.8 if i == len(recent_detections)-1 else 0.2  # Much higher weight for most recent
+                    matched_boxes.append((past_box, recency_weight))
+                    break  # Only match one box per frame
+        
+        if matched_boxes:
+            # Check if there's a significant position change from most recent detection
+            if len(matched_boxes) >= 2:
+                last_box = matched_boxes[-1][0]
+                max_coord_change = max(abs(c - p) for c, p in zip(current_box, last_box))
+                if max_coord_change > 0.05:  # More sensitive to changes (was 0.1)
+                    # Big change detected - use current box with minimal smoothing
+                    smoothed_box = list(current_box)
                     smoothed_detections.append((smoothed_box, keyword))
-                elif len(matched_boxes) >= MIN_DETECTION_FRAMES:
-                    # If transition isn't smooth but detection is consistent, use average
-                    avg_box = [sum(coord) / len(matched_boxes) for coord in zip(*matched_boxes)]
-                    smoothed_detections.append((avg_box, keyword))
+                    continue
+            
+            # Apply weighted EMA smoothing
+            smoothed_box = list(current_box)
+            total_weight = 0
+            
+            for past_box, recency_weight in matched_boxes:
+                weight = recency_weight * EMA_ALPHA
+                total_weight += weight
+                for i in range(4):
+                    smoothed_box[i] = smoothed_box[i] * (1 - weight) + past_box[i] * weight
+            
+            smoothed_detections.append((smoothed_box, keyword))
+        else:
+            # If no matches found, use current box as is
+            smoothed_detections.append((current_box, keyword))
     
     return smoothed_detections
 
 def describe_frames(video_path, model, tokenizer, test_mode=False):
     """Extract and detect ads in frames."""
     props = get_video_properties(video_path)
+    fps = props['fps']
     
     # If in test mode, only process first 3 seconds
     if test_mode:
-        frame_count = min(int(props['fps'] * TEST_MODE_DURATION), props['frame_count'])
+        frame_count = min(int(fps * TEST_MODE_DURATION), props['frame_count'])
     else:
         frame_count = props['frame_count']
     
-    ad_detections = {}  # Store ad detection results by frame number
+    ad_detections = {}  # Store ad detection results by timestamp
     detections_history = []  # Store recent detections for smoothing
     previous_detections = None  # Keep track of last valid detection
     
@@ -280,12 +261,15 @@ def describe_frames(video_path, model, tokenizer, test_mode=False):
     video = cv2.VideoCapture(video_path)
     
     # Process every frame
-    current_frame = 0
+    frame_count_processed = 0
     with tqdm(total=frame_count) as pbar:
-        while current_frame < frame_count:
+        while frame_count_processed < frame_count:
             ret, frame = video.read()
             if not ret:
                 break
+            
+            # Calculate exact timestamp for this frame
+            timestamp = frame_count_processed / fps
             
             # Detect ads in the frame
             detected_ads = detect_ads_in_frame(model, tokenizer, frame, previous_detections)
@@ -293,32 +277,31 @@ def describe_frames(video_path, model, tokenizer, test_mode=False):
             # Apply temporal smoothing
             if detected_ads:
                 smoothed_ads = smooth_detections(detected_ads, detections_history)
-                if smoothed_ads:  # Only store if we have stable detections
-                    ad_detections[current_frame] = smoothed_ads
-                    previous_detections = smoothed_ads
-                    print(f"\nFrame {current_frame} detections:")
-                    for box, keyword in smoothed_ads:
-                        print(f"- {keyword}: {box}")
-            
-            # Always append to history, even if empty
-            detections_history.append(detected_ads)
+                ad_detections[timestamp] = smoothed_ads
+                detections_history.append(smoothed_ads)
+                previous_detections = smoothed_ads
+                print(f"\nFrame {frame_count_processed} (t={timestamp:.3f}s) detections:")
+                for box, keyword in smoothed_ads:
+                    print(f"- {keyword}: {box}")
+            else:
+                detections_history.append([])
             
             # Keep history window limited
             if len(detections_history) > TEMPORAL_WINDOW:
                 detections_history.pop(0)
             
-            current_frame += 1
+            frame_count_processed += 1
             pbar.update(1)
     
     video.release()
     
-    if current_frame == 0:
+    if frame_count_processed == 0:
         print("No frames could be read from video")
         return {}
     
     return ad_detections
 
-def create_detection_video(video_path, ad_detections, output_path=None, ffmpeg_preset='medium'):
+def create_detection_video(video_path, ad_detections, output_path=None, ffmpeg_preset='medium', test_mode=False):
     """Create video with ad detection boxes only."""
     if output_path is None:
         os.makedirs('outputs', exist_ok=True)
@@ -327,6 +310,12 @@ def create_detection_video(video_path, ad_detections, output_path=None, ffmpeg_p
 
     props = get_video_properties(video_path)
     fps, width, height = props['fps'], props['width'], props['height']
+    
+    # If in test mode, only process first few seconds
+    if test_mode:
+        frame_count = min(int(fps * TEST_MODE_DURATION), props['frame_count'])
+    else:
+        frame_count = props['frame_count']
     
     video = cv2.VideoCapture(video_path)
     
@@ -339,27 +328,35 @@ def create_detection_video(video_path, ad_detections, output_path=None, ffmpeg_p
         (width, height)
     )
     
-    # Get the frame numbers where we have detections
-    detection_frames = sorted(ad_detections.keys())
-    print(f"Total frames with detections: {len(detection_frames)}")
+    # Get timestamps where we have detections
+    detection_times = sorted(ad_detections.keys())
+    print(f"Total frames with detections: {len(detection_times)}")
     
     print("Creating detection video...")
-    frame_count = 0
+    frame_count_processed = 0
     
-    with tqdm(total=props['frame_count']) as pbar:
-        while True:
+    with tqdm(total=frame_count) as pbar:
+        while frame_count_processed < frame_count:
             ret, frame = video.read()
             if not ret:
                 break
             
-            # Check if current frame has detections
-            if frame_count in ad_detections:
-                current_detections = ad_detections[frame_count]
-                print(f"Drawing detections for frame {frame_count}: {current_detections}")
+            # Calculate exact timestamp for this frame
+            timestamp = frame_count_processed / fps
+            
+            # Find closest detection time
+            current_detections = None
+            for t in detection_times:
+                if abs(t - timestamp) < 1/fps:  # Within one frame duration
+                    current_detections = ad_detections[t]
+                    break
+            
+            if current_detections:
+                print(f"Drawing detections for frame {frame_count_processed} (t={timestamp:.3f}s)")
                 frame = draw_ad_boxes(frame, current_detections)
             
             out.write(frame)
-            frame_count += 1
+            frame_count_processed += 1
             pbar.update(1)
     
     video.release()
@@ -392,7 +389,7 @@ def process_video(video_path, test_mode=False, ffmpeg_preset='medium'):
     ad_detections = describe_frames(video_path, model, tokenizer, test_mode)
     
     # Create video with detection boxes
-    output_path = create_detection_video(video_path, ad_detections, ffmpeg_preset=ffmpeg_preset)
+    output_path = create_detection_video(video_path, ad_detections, ffmpeg_preset=ffmpeg_preset, test_mode=test_mode)
     print(f"\nOutput saved to: {output_path}")
 
 def main():
