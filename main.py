@@ -242,11 +242,15 @@ def detect_ads_in_frame_single(model, tokenizer, image, detect_keyword):
     return detected_objects
 
 def draw_ad_boxes(frame, detected_objects, detect_keyword):
-    """Draw only detected regions on black background."""
+    """Create a mask where only detected objects are visible, rest is black."""
     height, width = frame.shape[:2]
     
     # Create black frame
     black_frame = np.zeros_like(frame)
+    
+    # If no detections, return completely black frame
+    if not detected_objects:
+        return black_frame
     
     for (box, keyword) in detected_objects:
         try:
@@ -404,11 +408,13 @@ def create_detection_video(video_path, ad_detections, detect_keyword, output_pat
                     current_detections = ad_detections[t]
                     break
             
+            # Process frame - if no detections, it will return a black frame
+            processed_frame = draw_ad_boxes(frame, current_detections if current_detections else [], detect_keyword)
+            out.write(processed_frame)
+            
             if current_detections:
                 print(f"Drawing detections for frame {frame_count_processed} (t={timestamp:.3f}s)")
-                frame = draw_ad_boxes(frame, current_detections, detect_keyword)
             
-            out.write(frame)
             frame_count_processed += 1
             pbar.update(1)
     
