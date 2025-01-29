@@ -242,11 +242,11 @@ def detect_ads_in_frame_single(model, tokenizer, image, detect_keyword):
     return detected_objects
 
 def draw_ad_boxes(frame, detected_objects, detect_keyword):
-    """Create a mask where only detected objects are visible, rest is black."""
+    """Draw only detected regions on black background."""
     height, width = frame.shape[:2]
     
-    # Create a black mask same size as frame
-    mask = np.zeros_like(frame)
+    # Create black frame
+    black_frame = np.zeros_like(frame)
     
     for (box, keyword) in detected_objects:
         try:
@@ -264,13 +264,13 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword):
             
             # Only copy if box has reasonable size
             if x2 > x1 and y2 > y1:
-                # Copy the region from original frame to mask
-                mask[y1:y2, x1:x2] = frame[y1:y2, x1:x2]
+                # Copy region from original frame to black frame
+                black_frame[y1:y2, x1:x2] = frame[y1:y2, x1:x2]
                 print(f"Copied visible region at coordinates: ({x1}, {y1}) to ({x2}, {y2})")
         except Exception as e:
-            print(f"Error processing region {box}: {str(e)}")
+            print(f"Error copying region {box}: {str(e)}")
     
-    return mask
+    return black_frame
 
 def filter_temporal_outliers(detections_dict, max_size_change=0.15):
     """Filter out sudden large changes in detection sizes by replacing with last valid frame.
