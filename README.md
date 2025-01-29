@@ -26,13 +26,18 @@ This tool automatically detects and highlights objects in videos using the Moond
 
 ## Installation
 
-1. Clone this repository
+1. Clone this repository and create a new virtual environment
+```bash
+git clone https://github.com/parsakhaz/object-detect-video.git
+python -m venv .venv
+source .venv/bin/activate
+```
 2. Install the required packages:
 ```bash
-pip install torch transformers opencv-python pillow tqdm einops pyvips accelerate numpy
+pip install -r requirements.txt
 ```
 3. Install ffmpeg:
-   - On Ubuntu/Debian: `sudo apt-get install ffmpeg`
+   - On Ubuntu/Debian: `sudo apt-get install ffmpeg libvips`
    - On macOS: `brew install ffmpeg`
    - On Windows: Download from [ffmpeg.org](https://ffmpeg.org/download.html)
 
@@ -79,6 +84,7 @@ python main.py                     # Detect advertisements (default)
 ```bash
 python main.py --rows 2 --cols 2   # Split each frame into 2x2 grid
 python main.py --rows 3 --cols 3   # Split each frame into 3x3 grid
+python main.py --rows 2 --cols 4 --detect face   # Split each frame into 2x4 grid and detect face
 ```
 
 You can combine arguments:
