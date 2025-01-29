@@ -242,7 +242,7 @@ def detect_ads_in_frame_single(model, tokenizer, image, detect_keyword):
     return detected_objects
 
 def draw_ad_boxes(frame, detected_objects, detect_keyword):
-    """Draw bounding boxes around detected objects."""
+    """Draw black censor bars over detected objects."""
     height, width = frame.shape[:2]
     
     for (box, keyword) in detected_objects:
@@ -261,18 +261,11 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword):
             
             # Only draw if box has reasonable size
             if x2 > x1 and y2 > y1:
-                # Draw red rectangle with thicker line
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
-                
-                # Add label
-                label = detect_keyword.capitalize()
-                label_size = cv2.getTextSize(label, FONT, 0.7, 2)[0]
-                cv2.rectangle(frame, (x1, y1-25), (x1 + label_size[0], y1), (0, 0, 255), -1)
-                cv2.putText(frame, label, (x1, y1-6), FONT, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
-                
-                print(f"Drew box at coordinates: ({x1}, {y1}) to ({x2}, {y2})")
+                # Draw solid black rectangle
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), -1)
+                print(f"Drew censor bar at coordinates: ({x1}, {y1}) to ({x2}, {y2})")
         except Exception as e:
-            print(f"Error drawing box {box}: {str(e)}")
+            print(f"Error drawing censor bar {box}: {str(e)}")
     
     return frame
 
