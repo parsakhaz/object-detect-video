@@ -41,13 +41,20 @@ def get_video_properties(video_path):
     return {'fps': fps, 'frame_count': frame_count, 'width': width, 'height': height}
 
 def is_valid_box(box):
-    """Check if box coordinates are reasonable (not covering entire frame)."""
+    """Check if box coordinates are reasonable."""
     x1, y1, x2, y2 = box
     width = x2 - x1
     height = y2 - y1
     
-    # Only reject if the box covers almost the entire frame in BOTH dimensions
-    return not (width > 0.98 and height > 0.98)
+    # Reject boxes that are too large (over 90% of frame in both dimensions)
+    if width > 0.9 and height > 0.9:
+        return False
+        
+    # Reject boxes that are too small (less than 1% of frame)
+    if width < 0.01 or height < 0.01:
+        return False
+    
+    return True
 
 def split_frame_into_tiles(frame, rows, cols):
     """Split a frame into a grid of tiles."""
@@ -269,6 +276,39 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword):
     
     return frame
 
+def filter_temporal_outliers(detections_dict, max_size_change=0.15):
+    """Filter out sudden large changes in detection sizes by replacing with last valid frame.
+    
+    Args:
+        detections_dict: Dictionary of {timestamp: [(box, keyword), ...]}
+        max_size_change: Maximum allowed relative size change between consecutive frames
+    """
+    timestamps = sorted(detections_dict.keys())
+    if len(timestamps) < 2:
+        return detections_dict
+    
+    filtered_detections = {}
+    prev_detections = None
+    prev_sizes = None
+    
+    for t in timestamps:
+        current_detections = detections_dict[t]
+        current_sizes = [(box[2] - box[0]) * (box[3] - box[1]) for box, _ in current_detections]
+        
+        if prev_sizes is not None:
+            # Check if any detection size changed dramatically
+            size_changes = [abs(curr/prev - 1) for curr, prev in zip(current_sizes, prev_sizes)]
+            if any(change > max_size_change for change in size_changes):
+                print(f"Replacing frame at {t}s with previous frame due to large size change")
+                filtered_detections[t] = prev_detections
+                continue
+        
+        filtered_detections[t] = current_detections
+        prev_detections = current_detections
+        prev_sizes = current_sizes
+    
+    return filtered_detections
+
 def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=False, rows=1, cols=1):
     """Extract and detect objects in frames."""
     props = get_video_properties(video_path)
@@ -314,6 +354,8 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
         print("No frames could be read from video")
         return {}
     
+    # Add temporal filtering before returning
+    ad_detections = filter_temporal_outliers(ad_detections)
     return ad_detections
 
 def create_detection_video(video_path, ad_detections, detect_keyword, output_path=None, ffmpeg_preset='medium', test_mode=False):
