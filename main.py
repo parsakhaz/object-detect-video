@@ -242,8 +242,11 @@ def detect_ads_in_frame_single(model, tokenizer, image, detect_keyword):
     return detected_objects
 
 def draw_ad_boxes(frame, detected_objects, detect_keyword):
-    """Draw bounding boxes around detected objects."""
+    """Create a mask where only detected objects are visible, rest is black."""
     height, width = frame.shape[:2]
+    
+    # Create a black mask same size as frame
+    mask = np.zeros_like(frame)
     
     for (box, keyword) in detected_objects:
         try:
@@ -259,22 +262,15 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword):
             x2 = max(0, min(x2, width-1))
             y2 = max(0, min(y2, height-1))
             
-            # Only draw if box has reasonable size
+            # Only copy if box has reasonable size
             if x2 > x1 and y2 > y1:
-                # Draw red rectangle with thicker line
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
-                
-                # Add label
-                label = detect_keyword.capitalize()
-                label_size = cv2.getTextSize(label, FONT, 0.7, 2)[0]
-                cv2.rectangle(frame, (x1, y1-25), (x1 + label_size[0], y1), (0, 0, 255), -1)
-                cv2.putText(frame, label, (x1, y1-6), FONT, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
-                
-                print(f"Drew box at coordinates: ({x1}, {y1}) to ({x2}, {y2})")
+                # Copy the region from original frame to mask
+                mask[y1:y2, x1:x2] = frame[y1:y2, x1:x2]
+                print(f"Copied visible region at coordinates: ({x1}, {y1}) to ({x2}, {y2})")
         except Exception as e:
-            print(f"Error drawing box {box}: {str(e)}")
+            print(f"Error processing region {box}: {str(e)}")
     
-    return frame
+    return mask
 
 def filter_temporal_outliers(detections_dict, max_size_change=0.15):
     """Filter out sudden large changes in detection sizes by replacing with last valid frame.
