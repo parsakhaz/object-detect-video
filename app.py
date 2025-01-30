@@ -92,10 +92,10 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
     This app uses [Moondream 2B](https://github.com/vikhyat/moondream), a powerful yet lightweight vision-language model, 
     to detect and visualize objects in videos. Moondream can recognize a wide variety of objects, people, text, and more 
     with high accuracy while being much smaller than traditional models. This enables Moondream to redact content from 
-    video quickly with the object detect capability.
+    video quickly with its [object detection](https://docs.moondream.ai/cloud/detect) capabilities.
     
     Upload a video and specify what you want to detect. The app will process each frame using Moondream and visualize 
-    the detections using your chosen style.
+    the detections using your chosen style. Join the [Moondream Discord server](https://discord.com/invite/tRUdpjDQfH) if you have questions on how this works.
     """)
     
     with gr.Row():
@@ -148,7 +148,7 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
             ### About Moondream
             Moondream is a tiny yet powerful vision-language model that can analyze images and answer questions about them. 
             It's designed to be lightweight and efficient while maintaining high accuracy. Some key features:
-            - Only 2B parameters (compared to 80B+ in other models)
+            - Only 2B parameters
             - Fast inference with minimal resource requirements
             - Supports CPU and GPU execution
             - Open source and free to use
@@ -157,7 +157,7 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
             - [GitHub Repository](https://github.com/vikhyat/moondream)
             - [Hugging Face Space](https://huggingface.co/vikhyatk/moondream2)
             - [Python Package](https://pypi.org/project/moondream/)
-            - [Promptable Redaction Recipe](https://docs.moondream.ai/recipes/)
+            - [Promptable Redaction Recipe](https://docs.moondream.ai/recipes)
             """)
             
     # Event handlers
