@@ -1,6 +1,8 @@
+> This recipe is part of the [Moondream repository](https://github.com/vikhyat/moondream/blob/main/recipes/promptable-video-redaction)
+
 # Promptable Video Redaction with Moondream
 
-This tool uses Moondream2, a powerful yet lightweight vision-language model, to detect and redact objects from videos. Moondream can recognize a wide variety of objects, people, text, and more with high accuracy while being much smaller than traditional models. 
+This tool uses Moondream 2B, a powerful yet lightweight vision-language model, to detect and redact objects from videos. Moondream can recognize a wide variety of objects, people, text, and more with high accuracy while being much smaller than traditional models. 
 
 ## About Moondream
 
@@ -48,7 +50,7 @@ Links:
 
 1. Clone this repository and create a new virtual environment
 ```bash
-git clone https://github.com/parsakhaz/object-detect-video.git
+git clone https://github.com/vikhyat/moondream/blob/main/recipes/promptable-video-redaction
 python -m venv .venv
 source .venv/bin/activate
 ```
@@ -60,6 +62,7 @@ pip install -r requirements.txt
    - On Ubuntu/Debian: `sudo apt-get install ffmpeg libvips`
    - On macOS: `brew install ffmpeg`
    - On Windows: Download from [ffmpeg.org](https://ffmpeg.org/download.html)
+> Downloading libvips for Windows requires some additional steps, see [here](https://docs.moondream.ai/quick-start)
 
 ## Usage
 
