@@ -22,7 +22,7 @@ Links:
 - Real-time object detection in videos using Moondream2
 - Multiple visualization styles:
   - Censor: Black boxes over detected objects
-  - YOLO: Traditional bounding boxes with labels
+  - Bounding Box: Traditional bounding boxes with labels
   - Hitmarker: Call of Duty style crosshair markers
 - Optional grid-based detection for improved accuracy
 - Flexible object type detection using natural language
@@ -120,7 +120,7 @@ python main.py --detect "person wearing a hat"  # Detect people with hats
 - `--box-style`: Choose visualization style
 ```bash
 python main.py --box-style censor     # Black boxes (default)
-python main.py --box-style yolo       # YOLO-style boxes with labels
+python main.py --box-style bounding-box       # Bounding box-style boxes with labels
 python main.py --box-style hitmarker  # COD-style hitmarkers
 ```
 
@@ -132,7 +132,7 @@ python main.py --rows 3 --cols 3   # Split each frame into 3x3 grid
 
 You can combine arguments:
 ```bash
-python main.py --detect "person wearing sunglasses" --box-style yolo --test --preset "fast" --rows 2 --cols 2
+python main.py --detect "person wearing sunglasses" --box-style bounding-box --test --preset "fast" --rows 2 --cols 2
 ```
 
 ### Visualization Styles
@@ -144,7 +144,7 @@ The tool supports three different visualization styles for detected objects:
    - Best for privacy and content moderation
    - Completely obscures the detected region
 
-2. **YOLO**
+2. **Bounding Box**
    - Traditional object detection style
    - Red bounding box around detected objects
    - Label showing object type above the box
@@ -165,7 +165,7 @@ Processed videos will be saved in the `outputs` directory with the format:
 
 For example:
 - `censor_face_video.mp4`
-- `yolo_person_video.mp4`
+- `bounding-box_person_video.mp4`
 - `hitmarker_car_video.mp4`
 
 The output videos will include:

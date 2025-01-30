@@ -10,7 +10,7 @@ from datetime import datetime
 # Constants
 TEST_MODE_DURATION = 3  # Process only first 3 seconds in test mode
 FFMPEG_PRESETS = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow']
-FONT = cv2.FONT_HERSHEY_SIMPLEX  # Font for YOLO-style labels
+FONT = cv2.FONT_HERSHEY_SIMPLEX  # Font for bounding-box-style labels
 
 # Detection parameters
 IOU_THRESHOLD = 0.5  # IoU threshold for considering boxes related
@@ -296,7 +296,7 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, box_style='censor'):
         frame: The video frame to draw on
         detected_objects: List of (box, keyword) tuples
         detect_keyword: The detection keyword
-        box_style: Visualization style ('censor', 'yolo', or 'hitmarker')
+        box_style: Visualization style ('censor', 'bounding-box', or 'hitmarker')
     """
     height, width = frame.shape[:2]
     
@@ -319,7 +319,7 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, box_style='censor'):
                 if box_style == 'censor':
                     # Draw solid black rectangle
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), -1)
-                elif box_style == 'yolo':
+                elif box_style == 'bounding-box':
                     # Draw red rectangle with thicker line
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
                     
@@ -541,7 +541,7 @@ def main():
                       help='Number of rows to split each frame into (default: 1)')
     parser.add_argument('--cols', type=int, default=1,
                       help='Number of columns to split each frame into (default: 1)')
-    parser.add_argument('--box-style', choices=['censor', 'yolo', 'hitmarker'], default='censor',
+    parser.add_argument('--box-style', choices=['censor', 'bounding-box', 'hitmarker'], default='censor',
                       help='Style of detection visualization (default: censor)')
     args = parser.parse_args()
     
