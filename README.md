@@ -179,9 +179,8 @@ The output videos will include:
 - Processing time depends on video length, grid size, and GPU availability
 - GPU is strongly recommended for faster processing
 - Requires sufficient disk space for temporary files
-- Detection quality may vary based on object type and video quality
-- Detection accuracy depends on Moondream's ability to recognize the specified object type
-- Grid-based detection should only be used when necessary due to significant performance impact
-- Web interface provides real-time progress updates and error messages
-- Different visualization styles may be more suitable for different use cases
+- Detection quality varies based on video quality and Moondream's ability to recognize the specified object
+- Grid-based detection impacts performance significantly - use only when needed
+- Web interface shows progress updates and errors
+- Choose visualization style based on your use case
 - Moondream can detect almost anything you can describe in natural language
