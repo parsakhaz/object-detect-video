@@ -8,13 +8,6 @@ import numpy as np
 from datetime import datetime
 
 # Constants
-FRAME_INTERVAL = 1  # Process every frame
-BATCH_SIZE = 8      # Process 8 frames at a time
-FONT = cv2.FONT_HERSHEY_SIMPLEX
-FONT_SCALE = 0.7
-MARGIN = 10
-PADDING = 10
-MIN_LINE_HEIGHT = 20
 TEST_MODE_DURATION = 3  # Process only first 3 seconds in test mode
 FFMPEG_PRESETS = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow']
 
@@ -219,13 +212,10 @@ def detect_ads_in_frame_single(model, tokenizer, image, detect_keyword):
     
     # Detect objects
     response = model.detect(image, detect_keyword)
-    print(f"\nDetection response for '{detect_keyword}':")
-    print(response)
     
     # Check if we have valid objects
     if response and "objects" in response and response["objects"]:
         objects = response["objects"]
-        print(f"Found {len(objects)} potential {detect_keyword} region(s)")
         
         for obj in objects:
             if all(k in obj for k in ['x_min', 'y_min', 'x_max', 'y_max']):
@@ -238,7 +228,6 @@ def detect_ads_in_frame_single(model, tokenizer, image, detect_keyword):
                 # If box is valid (not full-frame), add it
                 if is_valid_box(box):
                     detected_objects.append((box, detect_keyword))
-                    print(f"Added valid detection: {box}")
     
     return detected_objects
 
@@ -264,19 +253,17 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword):
             if x2 > x1 and y2 > y1:
                 # Draw solid black rectangle
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), -1)
-                print(f"Drew censor bar at coordinates: ({x1}, {y1}) to ({x2}, {y2})")
         except Exception as e:
-            print(f"Error drawing censor bar {box}: {str(e)}")
+            print(f"Error drawing censor bar: {str(e)}")
     
     return frame
 
-def filter_temporal_outliers(detections_dict, max_size_change=0.15):
+def filter_temporal_outliers(detections_dict):
     """Filter out extremely large detections that take up most of the frame.
     Only keeps detections that are reasonable in size.
     
     Args:
-        detections_dict: Dictionary of {timestamp: [(box, keyword), ...]}
-        max_size_change: Not used, kept for compatibility
+        detections_dict: Dictionary of {frame_number: [(box, keyword), ...]}
     """
     filtered_detections = {}
     
@@ -327,10 +314,6 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
             
             # Store results for every frame, even if empty
             ad_detections[frame_count_processed] = detected_objects
-            if detected_objects:
-                print(f"\nFrame {frame_count_processed} detections:")
-                for box, keyword in detected_objects:
-                    print(f"- {keyword}: {box}")
             
             frame_count_processed += 1
             pbar.update(1)
@@ -348,11 +331,10 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
 def create_detection_video(video_path, ad_detections, detect_keyword, output_path=None, ffmpeg_preset='medium', test_mode=False):
     """Create video with detection boxes."""
     if output_path is None:
-        timestamp = datetime.now().isoformat()
-        output_dir = os.path.join('outputs', timestamp)
-        os.makedirs(output_dir, exist_ok=True)
+        # Simplified output path without timestamp subdirectories
+        os.makedirs('outputs', exist_ok=True)
         base_name = os.path.splitext(os.path.basename(video_path))[0]
-        output_path = os.path.join(output_dir, f'censor_{detect_keyword}_{base_name}.mp4')
+        output_path = os.path.join('outputs', f'censor_{detect_keyword}_{base_name}.mp4')
 
     props = get_video_properties(video_path)
     fps, width, height = props['fps'], props['width'], props['height']

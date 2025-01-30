@@ -5,13 +5,13 @@ This tool automatically detects and censors objects in videos using the Moondrea
 ## Features
 
 - Real-time object detection and censoring in videos
-- Grid-based detection for improved accuracy on large frames
+- Optional grid-based detection for improved accuracy on large frames
 - Flexible object type censoring
-- Temporal smoothing for stable censor boxes
-- Frame-by-frame processing with IoU tracking
+- Frame-by-frame processing with IoU-based merging
 - Batch processing of multiple videos
 - Web-compatible output format
-- Configurable detection parameters
+- User-friendly web interface
+- Command-line interface for automation
 
 ## Requirements
 
@@ -23,6 +23,7 @@ This tool automatically detects and censors objects in videos using the Moondrea
 - tqdm
 - ffmpeg
 - numpy
+- gradio (for web interface)
 
 ## Installation
 
@@ -42,6 +43,24 @@ pip install -r requirements.txt
    - On Windows: Download from [ffmpeg.org](https://ffmpeg.org/download.html)
 
 ## Usage
+
+### Web Interface
+
+1. Start the web interface:
+~~~bash
+python app.py
+~~~
+
+2. Open the provided URL in your browser
+
+3. Use the interface to:
+   - Upload your video
+   - Specify what to censor (e.g., face, logo, text)
+   - Adjust processing speed and quality
+   - Configure grid size for detection
+   - Process and download the censored video
+
+### Command Line Interface
 
 1. Create an `inputs` directory in the same folder as the script:
 ~~~bash
@@ -93,15 +112,18 @@ python main.py --detect person --test --preset fast --rows 2 --cols 2
 
 ### Grid-based Detection
 
-The grid-based detection feature splits each frame into smaller tiles before processing. This can improve detection accuracy by:
-- Allowing the model to focus on smaller regions
-- Better detecting small objects that might be missed in full-frame analysis
-- Reducing the impact of scale on detection performance
+The grid-based detection feature splits each frame into smaller tiles before processing. While this can improve detection accuracy in some cases, it significantly increases processing time since each frame must be processed multiple times. Grid-based detection is recommended only when:
+
+- You need to detect very small objects in high-resolution videos
+- Standard detection is missing important objects
+- Processing time is not a major concern
 
 The trade-offs are:
-- Increased processing time (proportional to number of grid cells)
-- Potential for duplicate detections (handled by NMS merging)
-- Memory usage increases with grid size
+- Processing time increases proportionally with number of grid cells
+- Duplicate detections across tiles (handled by IoU-based merging)
+- Higher memory usage
+
+For most use cases, the default single-frame detection (--rows 1 --cols 1) provides good results with much faster processing.
 
 ## Output
 
@@ -119,6 +141,6 @@ The output videos will include:
 - GPU is strongly recommended for faster processing
 - Requires sufficient disk space for temporary files
 - Detection quality may vary based on object type and video quality
-- Temporal smoothing helps reduce jitter in censor boxes while maintaining responsiveness
 - Detection accuracy depends on Moondream2's ability to recognize the specified object type
-- Grid size should be chosen based on video resolution and object size 
+- Grid-based detection should only be used when necessary due to significant performance impact
+- Web interface provides real-time progress updates and error messages
