@@ -420,11 +420,20 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
 def create_detection_video(video_path, ad_detections, detect_keyword, output_path=None, ffmpeg_preset='medium', test_mode=False, box_style='censor'):
     """Create video with detection boxes."""
     if output_path is None:
-        # Simplified output path without timestamp subdirectories
-        os.makedirs('outputs', exist_ok=True)
+        # Create outputs directory if it doesn't exist
+        outputs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'outputs')
+        os.makedirs(outputs_dir, exist_ok=True)
+        
+        # Clean the detect_keyword for filename
+        safe_keyword = "".join(x for x in detect_keyword if x.isalnum() or x in (' ', '_', '-'))
+        safe_keyword = safe_keyword.replace(' ', '_')
+        
+        # Create output filename
         base_name = os.path.splitext(os.path.basename(video_path))[0]
-        output_path = os.path.join('outputs', f'{box_style}_{detect_keyword}_{base_name}.mp4')
-
+        output_path = os.path.join(outputs_dir, f'{box_style}_{safe_keyword}_{base_name}.mp4')
+    
+    print(f"Will save output to: {output_path}")
+    
     props = get_video_properties(video_path)
     fps, width, height = props['fps'], props['width'], props['height']
     
@@ -470,19 +479,31 @@ def create_detection_video(video_path, ad_detections, detect_keyword, output_pat
     out.release()
     
     # Convert to web-compatible format more efficiently
-    subprocess.run([
-        'ffmpeg', '-y',
-        '-i', temp_output,
-        '-c:v', 'libx264',
-        '-preset', ffmpeg_preset,
-        '-crf', '23',
-        '-movflags', '+faststart',  # Better web playback
-        '-loglevel', 'error',
-        output_path
-    ])
-    
-    os.remove(temp_output)  # Remove the temporary file
-    return output_path
+    try:
+        subprocess.run([
+            'ffmpeg', '-y',
+            '-i', temp_output,
+            '-c:v', 'libx264',
+            '-preset', ffmpeg_preset,
+            '-crf', '23',
+            '-movflags', '+faststart',  # Better web playback
+            '-loglevel', 'error',
+            output_path
+        ], check=True)
+        
+        os.remove(temp_output)  # Remove the temporary file
+        
+        if not os.path.exists(output_path):
+            print(f"Warning: FFmpeg completed but output file not found at {output_path}")
+            return None
+            
+        return output_path
+        
+    except subprocess.CalledProcessError as e:
+        print(f"Error running FFmpeg: {str(e)}")
+        if os.path.exists(temp_output):
+            os.remove(temp_output)
+        return None
 
 def process_video(video_path, detect_keyword, test_mode=False, ffmpeg_preset='medium', rows=1, cols=1, box_style='censor'):
     """Process a single video file."""
