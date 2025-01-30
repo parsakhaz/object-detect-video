@@ -5,6 +5,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 import numpy as np
+from datetime import datetime
 
 # Constants
 FRAME_INTERVAL = 1  # Process every frame
@@ -347,9 +348,11 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
 def create_detection_video(video_path, ad_detections, detect_keyword, output_path=None, ffmpeg_preset='medium', test_mode=False):
     """Create video with detection boxes."""
     if output_path is None:
-        os.makedirs('outputs', exist_ok=True)
+        timestamp = datetime.now().isoformat()
+        output_dir = os.path.join('outputs', timestamp)
+        os.makedirs(output_dir, exist_ok=True)
         base_name = os.path.splitext(os.path.basename(video_path))[0]
-        output_path = os.path.join('outputs', f'censor_{detect_keyword}_{base_name}.mp4')
+        output_path = os.path.join(output_dir, f'censor_{detect_keyword}_{base_name}.mp4')
 
     props = get_video_properties(video_path)
     fps, width, height = props['fps'], props['width'], props['height']
