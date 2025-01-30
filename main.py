@@ -521,7 +521,13 @@ def process_video(video_path, detect_keyword, test_mode=False, ffmpeg_preset='me
     output_path = create_detection_video(video_path, ad_detections, detect_keyword, 
                                        ffmpeg_preset=ffmpeg_preset, test_mode=test_mode,
                                        box_style=box_style)
+    
+    if output_path is None:
+        print("\nError: Failed to create output video")
+        return None
+        
     print(f"\nOutput saved to: {output_path}")
+    return output_path
 
 def main():
     """Process all videos in the inputs directory."""
@@ -558,10 +564,15 @@ def main():
     print(f"Grid size: {args.rows}x{args.cols}")
     print(f"Box style: {args.box_style}")
     
+    success_count = 0
     for video_file in video_files:
         video_path = os.path.join(input_dir, video_file)
-        process_video(video_path, args.detect, test_mode=args.test, ffmpeg_preset=args.preset,
+        output_path = process_video(video_path, args.detect, test_mode=args.test, ffmpeg_preset=args.preset,
                      rows=args.rows, cols=args.cols, box_style=args.box_style)
+        if output_path:
+            success_count += 1
+    
+    print(f"\nProcessing complete. Successfully processed {success_count} out of {len(video_files)} videos.")
 
 if __name__ == "__main__":
     main()
