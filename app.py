@@ -5,7 +5,8 @@ from main import load_moondream, process_video
 import tempfile
 import shutil
 import torch
-import spaces
+
+# import spaces
 
 # Get absolute path to workspace root
 WORKSPACE_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -22,7 +23,7 @@ model, tokenizer = load_moondream()
 
 
 # Uncomment for Hugging Face Spaces
-@spaces.GPU(duration=120)
+# @spaces.GPU(duration=120)
 def process_video_file(
     video_file, detect_keyword, box_style, ffmpeg_preset, rows, cols, test_mode
 ):
@@ -110,12 +111,24 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
         with gr.Column():
             # Input components
             video_input = gr.Video(label="Upload Video")
+
             detect_input = gr.Textbox(
                 label="What to Detect",
                 placeholder="e.g. face, logo, text, person, car, dog, etc.",
                 value="face",
                 info="Moondream can detect anything that you can describe in natural language",
             )
+
+            gr.Examples(
+                examples=[
+                    ["examples/homealone.mp4", "face"],
+                    ["examples/soccer.mp4", "ball"],
+                    ["examples/rally.mp4", "license plate"],
+                ],
+                inputs=[video_input, detect_input],
+                label="Try these examples",
+            )
+
             process_btn = gr.Button("Process Video", variant="primary")
 
             with gr.Accordion("Advanced Settings", open=False):
