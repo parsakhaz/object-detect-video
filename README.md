@@ -1,5 +1,3 @@
-> This recipe is part of the [Moondream repository](https://github.com/vikhyat/moondream/blob/main/recipes/promptable-video-redaction)
-
 # Promptable Video Redaction with Moondream
 
 This tool uses Moondream 2B, a powerful yet lightweight vision-language model, to detect and redact objects from videos. Moondream can recognize a wide variety of objects, people, text, and more with high accuracy while being much smaller than traditional models. 
@@ -21,7 +19,7 @@ Links:
 
 ## Features
 
-- Real-time object detection in videos using Moondream2
+- Real-time object detection in videos using Moondream
 - Multiple visualization styles:
   - Censor: Black boxes over detected objects
   - Bounding Box: Traditional bounding boxes with labels
@@ -182,7 +180,7 @@ The output videos will include:
 - GPU is strongly recommended for faster processing
 - Requires sufficient disk space for temporary files
 - Detection quality may vary based on object type and video quality
-- Detection accuracy depends on Moondream2's ability to recognize the specified object type
+- Detection accuracy depends on Moondream's ability to recognize the specified object type
 - Grid-based detection should only be used when necessary due to significant performance impact
 - Web interface provides real-time progress updates and error messages
 - Different visualization styles may be more suitable for different use cases
