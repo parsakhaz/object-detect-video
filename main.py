@@ -349,7 +349,7 @@ def create_detection_video(video_path, ad_detections, detect_keyword, output_pat
     if output_path is None:
         os.makedirs('outputs', exist_ok=True)
         base_name = os.path.splitext(os.path.basename(video_path))[0]
-        output_path = os.path.join('outputs', f'detected_{base_name}_web.mp4')
+        output_path = os.path.join('outputs', f'censor_{detect_keyword}_{base_name}.mp4')
 
     props = get_video_properties(video_path)
     fps, width, height = props['fps'], props['width'], props['height']
@@ -362,8 +362,10 @@ def create_detection_video(video_path, ad_detections, detect_keyword, output_pat
     
     video = cv2.VideoCapture(video_path)
     
-    # Use more efficient temporary codec
-    temp_output = output_path.replace('_web.mp4', '_temp.mp4')
+    # Create temp output path by adding _temp before the extension
+    base, ext = os.path.splitext(output_path)
+    temp_output = f"{base}_temp{ext}"
+    
     out = cv2.VideoWriter(
         temp_output,
         cv2.VideoWriter_fourcc(*'mp4v'),
@@ -444,8 +446,7 @@ def main():
     os.makedirs('outputs', exist_ok=True)
     
     video_files = [f for f in os.listdir(input_dir) 
-                   if f.lower().endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm'))
-                   and not f.startswith('captioned_')]
+                   if f.lower().endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm'))]
     
     if not video_files:
         print("No video files found in 'inputs' directory")
