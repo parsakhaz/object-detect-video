@@ -270,35 +270,30 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword):
     return frame
 
 def filter_temporal_outliers(detections_dict, max_size_change=0.15):
-    """Filter out sudden large changes in detection sizes by replacing with last valid frame.
+    """Filter out extremely large detections that take up most of the frame.
+    Only keeps detections that are reasonable in size.
     
     Args:
         detections_dict: Dictionary of {timestamp: [(box, keyword), ...]}
-        max_size_change: Maximum allowed relative size change between consecutive frames
+        max_size_change: Not used, kept for compatibility
     """
-    timestamps = sorted(detections_dict.keys())
-    if len(timestamps) < 2:
-        return detections_dict
-    
     filtered_detections = {}
-    prev_detections = None
-    prev_sizes = None
     
-    for t in timestamps:
-        current_detections = detections_dict[t]
-        current_sizes = [(box[2] - box[0]) * (box[3] - box[1]) for box, _ in current_detections]
+    for t, detections in detections_dict.items():
+        # Only keep detections that aren't too large
+        valid_detections = []
+        for box, keyword in detections:
+            # Calculate box size as percentage of frame
+            width = box[2] - box[0]
+            height = box[3] - box[1]
+            area = width * height
+            
+            # If box is less than 90% of frame, keep it
+            if area < 0.9:
+                valid_detections.append((box, keyword))
         
-        if prev_sizes is not None:
-            # Check if any detection size changed dramatically
-            size_changes = [abs(curr/prev - 1) for curr, prev in zip(current_sizes, prev_sizes)]
-            if any(change > max_size_change for change in size_changes):
-                print(f"Replacing frame at {t}s with previous frame due to large size change")
-                filtered_detections[t] = prev_detections
-                continue
-        
-        filtered_detections[t] = current_detections
-        prev_detections = current_detections
-        prev_sizes = current_sizes
+        if valid_detections:
+            filtered_detections[t] = valid_detections
     
     return filtered_detections
 
@@ -313,7 +308,7 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
     else:
         frame_count = props['frame_count']
     
-    ad_detections = {}  # Store detection results by timestamp
+    ad_detections = {}  # Store detection results by frame number
     
     print("Extracting frames and detecting objects...")
     video = cv2.VideoCapture(video_path)
@@ -326,15 +321,13 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
             if not ret:
                 break
             
-            # Calculate exact timestamp for this frame
-            timestamp = frame_count_processed / fps
-            
             # Detect objects in the frame
             detected_objects = detect_ads_in_frame(model, tokenizer, frame, detect_keyword, rows=rows, cols=cols)
             
+            # Store results for every frame, even if empty
+            ad_detections[frame_count_processed] = detected_objects
             if detected_objects:
-                ad_detections[timestamp] = detected_objects
-                print(f"\nFrame {frame_count_processed} (t={timestamp:.3f}s) detections:")
+                print(f"\nFrame {frame_count_processed} detections:")
                 for box, keyword in detected_objects:
                     print(f"- {keyword}: {box}")
             
@@ -347,7 +340,7 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
         print("No frames could be read from video")
         return {}
     
-    # Add temporal filtering before returning
+    # Filter out only extremely large detections
     ad_detections = filter_temporal_outliers(ad_detections)
     return ad_detections
 
@@ -378,10 +371,6 @@ def create_detection_video(video_path, ad_detections, detect_keyword, output_pat
         (width, height)
     )
     
-    # Get timestamps where we have detections
-    detection_times = sorted(ad_detections.keys())
-    print(f"Total frames with detections: {len(detection_times)}")
-    
     print("Creating detection video...")
     frame_count_processed = 0
     
@@ -391,19 +380,12 @@ def create_detection_video(video_path, ad_detections, detect_keyword, output_pat
             if not ret:
                 break
             
-            # Calculate exact timestamp for this frame
-            timestamp = frame_count_processed / fps
-            
-            # Find closest detection time
-            current_detections = None
-            for t in detection_times:
-                if abs(t - timestamp) < 1/fps:  # Within one frame duration
-                    current_detections = ad_detections[t]
-                    break
-            
-            if current_detections:
-                print(f"Drawing detections for frame {frame_count_processed} (t={timestamp:.3f}s)")
-                frame = draw_ad_boxes(frame, current_detections, detect_keyword)
+            # Get detections for this exact frame
+            if frame_count_processed in ad_detections:
+                current_detections = ad_detections[frame_count_processed]
+                if current_detections:
+                    print(f"Drawing detections for frame {frame_count_processed}")
+                    frame = draw_ad_boxes(frame, current_detections, detect_keyword)
             
             out.write(frame)
             frame_count_processed += 1
