@@ -86,12 +86,13 @@ def process_video_file(video_file, detect_keyword, box_style, ffmpeg_preset, row
         raise gr.Error(f"Error processing video: {str(e)}")
 
 # Create the Gradio interface
-with gr.Blocks(title="Video Object Detection with Moondream") as app:
-    gr.Markdown("# Video Object Detection with Moondream")
+with gr.Blocks(title="Promptable Video Redaction") as app:
+    gr.Markdown("# Promptable Video Redaction with Moondream")
     gr.Markdown("""
-    This app uses [Moondream](https://github.com/vikhyat/moondream), a powerful yet lightweight vision-language model, 
+    This app uses [Moondream 2B](https://github.com/vikhyat/moondream), a powerful yet lightweight vision-language model, 
     to detect and visualize objects in videos. Moondream can recognize a wide variety of objects, people, text, and more 
-    with high accuracy while being much smaller than traditional models.
+    with high accuracy while being much smaller than traditional models. This enables Moondream to redact content from 
+    video quickly with the object detect capability.
     
     Upload a video and specify what you want to detect. The app will process each frame using Moondream and visualize 
     the detections using your chosen style.
@@ -108,7 +109,7 @@ with gr.Blocks(title="Video Object Detection with Moondream") as app:
                 info="Moondream can detect almost anything you can describe in natural language"
             )
             box_style_input = gr.Radio(
-                choices=['censor', 'yolo', 'hitmarker'],
+                choices=['censor', 'bounding-box', 'hitmarker'],
                 value='censor',
                 label="Visualization Style",
                 info="Choose how to display detections"
@@ -156,6 +157,7 @@ with gr.Blocks(title="Video Object Detection with Moondream") as app:
             - [GitHub Repository](https://github.com/vikhyat/moondream)
             - [Hugging Face Space](https://huggingface.co/vikhyatk/moondream2)
             - [Python Package](https://pypi.org/project/moondream/)
+            - [Promptable Redaction Recipe](https://docs.moondream.ai/recipes/)
             """)
             
     # Event handlers

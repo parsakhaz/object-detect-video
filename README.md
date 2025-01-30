@@ -1,6 +1,6 @@
-# Video Object Detection with Moondream
+# Promptable Video Redaction with Moondream
 
-This tool uses Moondream2, a powerful yet lightweight vision-language model, to detect and visualize objects in videos. Moondream can recognize a wide variety of objects, people, text, and more with high accuracy while being much smaller than traditional models.
+This tool uses Moondream2, a powerful yet lightweight vision-language model, to detect and redact objects from videos. Moondream can recognize a wide variety of objects, people, text, and more with high accuracy while being much smaller than traditional models. 
 
 ## About Moondream
 
