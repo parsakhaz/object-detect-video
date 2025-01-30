@@ -37,21 +37,37 @@ def process_video_file(video_file, detect_keyword, box_style, ffmpeg_preset, row
                 box_style=box_style
             )
             
-            return output_path
+            # Copy output file to a temporary file that Gradio can access
+            temp_output = os.path.join(temp_dir, 'output.mp4')
+            shutil.copy2(output_path, temp_output)
+            
+            return temp_output
             
     except Exception as e:
         raise gr.Error(f"Error processing video: {str(e)}")
 
 # Create the Gradio interface
-with gr.Blocks(title="Video Object Detection") as app:
-    gr.Markdown("# Video Object Detection")
-    gr.Markdown("Upload a video and specify what you want to detect. The app will process the video and visualize the detections.")
+with gr.Blocks(title="Video Object Detection with Moondream") as app:
+    gr.Markdown("# Video Object Detection with Moondream")
+    gr.Markdown("""
+    This app uses [Moondream](https://github.com/vikhyat/moondream), a powerful yet lightweight vision-language model, 
+    to detect and visualize objects in videos. Moondream can recognize a wide variety of objects, people, text, and more 
+    with high accuracy while being much smaller than traditional models.
+    
+    Upload a video and specify what you want to detect. The app will process each frame using Moondream and visualize 
+    the detections using your chosen style.
+    """)
     
     with gr.Row():
         with gr.Column():
             # Input components
             video_input = gr.Video(label="Upload Video")
-            detect_input = gr.Textbox(label="What to Detect", placeholder="e.g. face, logo, text", value="face")
+            detect_input = gr.Textbox(
+                label="What to Detect", 
+                placeholder="e.g. face, logo, text, person, car, dog, etc.", 
+                value="face",
+                info="Moondream can detect almost anything you can describe in natural language"
+            )
             box_style_input = gr.Radio(
                 choices=['censor', 'yolo', 'hitmarker'],
                 value='censor',
@@ -92,7 +108,20 @@ with gr.Blocks(title="Video Object Detection") as app:
         - Processing Speed: Faster presets process quicker but may reduce quality
         - Grid Size: Larger grids can help detect smaller objects but process slower
     5. Click 'Process Video' and wait for the result
+    
+    ### About Moondream
+    Moondream is a tiny yet powerful vision-language model that can analyze images and answer questions about them. 
+    It's designed to be lightweight and efficient while maintaining high accuracy. Some key features:
+    - Only 2B parameters (compared to 80B+ in other models)
+    - Fast inference with minimal resource requirements
+    - Supports CPU and GPU execution
+    - Open source and free to use
+    
+    Links:
+    - [GitHub Repository](https://github.com/vikhyat/moondream)
+    - [Hugging Face Space](https://huggingface.co/vikhyatk/moondream2)
+    - [Python Package](https://pypi.org/project/moondream/)
     """)
 
 if __name__ == "__main__":
-    app.launch(share=True) 
+    app.launch(share=True)

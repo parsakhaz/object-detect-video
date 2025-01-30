@@ -1,16 +1,31 @@
-# Moondream Video Object Detection
+# Video Object Detection with Moondream
 
-This tool automatically detects objects in videos using the Moondream2 vision-language model. It supports multiple visualization styles including censoring, YOLO-style bounding boxes, and COD-style hitmarkers.
+This tool uses Moondream2, a powerful yet lightweight vision-language model, to detect and visualize objects in videos. Moondream can recognize a wide variety of objects, people, text, and more with high accuracy while being much smaller than traditional models.
+
+## About Moondream
+
+Moondream is a tiny yet powerful vision-language model that can analyze images and answer questions about them. It's designed to be lightweight and efficient while maintaining high accuracy. Some key features:
+
+- Only 2B parameters
+- Fast inference with minimal resource requirements
+- Supports CPU and GPU execution
+- Open source and free to use
+- Can detect almost anything you can describe in natural language
+
+Links:
+- [GitHub Repository](https://github.com/vikhyat/moondream)
+- [Hugging Face Space](https://huggingface.co/vikhyatk/moondream2)
+- [Python Package](https://pypi.org/project/moondream/)
 
 ## Features
 
-- Real-time object detection in videos
+- Real-time object detection in videos using Moondream2
 - Multiple visualization styles:
-  - Censor: Black boxes over detected regions
+  - Censor: Black boxes over detected objects
   - YOLO: Traditional bounding boxes with labels
   - Hitmarker: Call of Duty style crosshair markers
 - Optional grid-based detection for improved accuracy
-- Flexible object type detection
+- Flexible object type detection using natural language
 - Frame-by-frame processing with IoU-based merging
 - Batch processing of multiple videos
 - Web-compatible output format
@@ -95,11 +110,11 @@ python main.py --preset ultrafast  # Fastest, lower quality
 python main.py --preset veryslow   # Slowest, highest quality
 ~~~
 
-- `--detect`: Specify what object type to detect
+- `--detect`: Specify what object type to detect (using natural language)
 ~~~bash
 python main.py --detect person     # Detect people
-python main.py --detect car        # Detect cars
-python main.py --detect face       # Detect faces (default)
+python main.py --detect "red car"  # Detect red cars
+python main.py --detect "person wearing a hat"  # Detect people with hats
 ~~~
 
 - `--box-style`: Choose visualization style
@@ -113,12 +128,11 @@ python main.py --box-style hitmarker  # COD-style hitmarkers
 ~~~bash
 python main.py --rows 2 --cols 2   # Split each frame into 2x2 grid
 python main.py --rows 3 --cols 3   # Split each frame into 3x3 grid
-python main.py --rows 2 --cols 4 --detect face   # Split each frame into 2x4 grid and censor faces
 ~~~
 
 You can combine arguments:
 ~~~bash
-python main.py --detect "person" --box-style yolo --test --preset "fast" --rows 2 --cols 2
+python main.py --detect "person wearing sunglasses" --box-style yolo --test --preset "fast" --rows 2 --cols 2
 ~~~
 
 ### Visualization Styles
@@ -169,3 +183,4 @@ The output videos will include:
 - Grid-based detection should only be used when necessary due to significant performance impact
 - Web interface provides real-time progress updates and error messages
 - Different visualization styles may be more suitable for different use cases
+- Moondream can detect almost anything you can describe in natural language
