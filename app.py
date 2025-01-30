@@ -21,7 +21,7 @@ print("Loading Moondream model...")
 model, tokenizer = load_moondream()
 
 # Uncomment for Hugging Face Spaces
-# @spaces.GPU(duration=120)
+@spaces.GPU(duration=120)
 def process_video_file(video_file, detect_keyword, box_style, ffmpeg_preset, rows, cols, test_mode):
     """Process a video file through the Gradio interface."""
     try:
