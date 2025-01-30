@@ -1,12 +1,16 @@
-# Moondream Video Object Censor
+# Moondream Video Object Detection
 
-This tool automatically detects and censors objects in videos using the Moondream2 vision-language model. It can censor any object type that Moondream2 can recognize by placing black boxes over detected regions.
+This tool automatically detects objects in videos using the Moondream2 vision-language model. It supports multiple visualization styles including censoring, YOLO-style bounding boxes, and COD-style hitmarkers.
 
 ## Features
 
-- Real-time object detection and censoring in videos
-- Optional grid-based detection for improved accuracy on large frames
-- Flexible object type censoring
+- Real-time object detection in videos
+- Multiple visualization styles:
+  - Censor: Black boxes over detected regions
+  - YOLO: Traditional bounding boxes with labels
+  - Hitmarker: Call of Duty style crosshair markers
+- Optional grid-based detection for improved accuracy
+- Flexible object type detection
 - Frame-by-frame processing with IoU-based merging
 - Batch processing of multiple videos
 - Web-compatible output format
@@ -91,11 +95,18 @@ python main.py --preset ultrafast  # Fastest, lower quality
 python main.py --preset veryslow   # Slowest, highest quality
 ~~~
 
-- `--detect`: Specify what object type to censor
+- `--detect`: Specify what object type to detect
 ~~~bash
-python main.py --detect person     # Censor people
-python main.py --detect car        # Censor cars
-python main.py --detect face       # Censor faces (default)
+python main.py --detect person     # Detect people
+python main.py --detect car        # Detect cars
+python main.py --detect face       # Detect faces (default)
+~~~
+
+- `--box-style`: Choose visualization style
+~~~bash
+python main.py --box-style censor     # Black boxes (default)
+python main.py --box-style yolo       # YOLO-style boxes with labels
+python main.py --box-style hitmarker  # COD-style hitmarkers
 ~~~
 
 - `--rows` and `--cols`: Enable grid-based detection by splitting frames
@@ -107,32 +118,45 @@ python main.py --rows 2 --cols 4 --detect face   # Split each frame into 2x4 gri
 
 You can combine arguments:
 ~~~bash
-python main.py --detect person --test --preset fast --rows 2 --cols 2
+python main.py --detect "person" --box-style yolo --test --preset "fast" --rows 2 --cols 2
 ~~~
 
-### Grid-based Detection
+### Visualization Styles
 
-The grid-based detection feature splits each frame into smaller tiles before processing. While this can improve detection accuracy in some cases, it significantly increases processing time since each frame must be processed multiple times. Grid-based detection is recommended only when:
+The tool supports three different visualization styles for detected objects:
 
-- You need to detect very small objects in high-resolution videos
-- Standard detection is missing important objects
-- Processing time is not a major concern
+1. **Censor** (default)
+   - Places solid black rectangles over detected objects
+   - Best for privacy and content moderation
+   - Completely obscures the detected region
 
-The trade-offs are:
-- Processing time increases proportionally with number of grid cells
-- Duplicate detections across tiles (handled by IoU-based merging)
-- Higher memory usage
+2. **YOLO**
+   - Traditional object detection style
+   - Red bounding box around detected objects
+   - Label showing object type above the box
+   - Good for analysis and debugging
 
-For most use cases, the default single-frame detection (--rows 1 --cols 1) provides good results with much faster processing.
+3. **Hitmarker**
+   - Call of Duty inspired visualization
+   - White crosshair marker at center of detected objects
+   - Small label above the marker
+   - Stylistic choice for gaming-inspired visualization
+
+Choose the style that best fits your use case using the `--box-style` argument.
 
 ## Output
 
 Processed videos will be saved in the `outputs` directory with the format:
-`censor_[object_type]_[original_filename].mp4`
+`[style]_[object_type]_[original_filename].mp4`
+
+For example:
+- `censor_face_video.mp4`
+- `yolo_person_video.mp4`
+- `hitmarker_car_video.mp4`
 
 The output videos will include:
 - Original video content
-- Black censor boxes over detected objects
+- Selected visualization style for detected objects
 - Web-compatible H.264 encoding
 
 ## Notes
@@ -144,3 +168,4 @@ The output videos will include:
 - Detection accuracy depends on Moondream2's ability to recognize the specified object type
 - Grid-based detection should only be used when necessary due to significant performance impact
 - Web interface provides real-time progress updates and error messages
+- Different visualization styles may be more suitable for different use cases

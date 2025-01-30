@@ -10,9 +10,18 @@ from datetime import datetime
 # Constants
 TEST_MODE_DURATION = 3  # Process only first 3 seconds in test mode
 FFMPEG_PRESETS = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow']
+FONT = cv2.FONT_HERSHEY_SIMPLEX  # Font for YOLO-style labels
 
 # Detection parameters
 IOU_THRESHOLD = 0.5  # IoU threshold for considering boxes related
+
+# Hitmarker parameters
+HITMARKER_SIZE = 20  # Size of the hitmarker in pixels
+HITMARKER_GAP = 3    # Size of the empty space in the middle (reduced from 8)
+HITMARKER_THICKNESS = 2  # Thickness of hitmarker lines
+HITMARKER_COLOR = (255, 255, 255)  # White color for hitmarker
+HITMARKER_SHADOW_COLOR = (80, 80, 80)  # Lighter gray for shadow effect
+HITMARKER_SHADOW_OFFSET = 1  # Smaller shadow offset
 
 def load_moondream():
     """Load Moondream model and tokenizer."""
@@ -231,8 +240,64 @@ def detect_ads_in_frame_single(model, tokenizer, image, detect_keyword):
     
     return detected_objects
 
-def draw_ad_boxes(frame, detected_objects, detect_keyword):
-    """Draw black censor bars over detected objects."""
+def draw_hitmarker(frame, center_x, center_y, size=HITMARKER_SIZE, color=HITMARKER_COLOR, shadow=True):
+    """Draw a COD-style hitmarker cross with more space in the middle."""
+    half_size = size // 2
+    
+    # Draw shadow first if enabled
+    if shadow:
+        # Top-left to center shadow
+        cv2.line(frame, 
+                (center_x - half_size + HITMARKER_SHADOW_OFFSET, center_y - half_size + HITMARKER_SHADOW_OFFSET),
+                (center_x - HITMARKER_GAP + HITMARKER_SHADOW_OFFSET, center_y - HITMARKER_GAP + HITMARKER_SHADOW_OFFSET),
+                HITMARKER_SHADOW_COLOR, HITMARKER_THICKNESS)
+        # Top-right to center shadow
+        cv2.line(frame,
+                (center_x + half_size + HITMARKER_SHADOW_OFFSET, center_y - half_size + HITMARKER_SHADOW_OFFSET),
+                (center_x + HITMARKER_GAP + HITMARKER_SHADOW_OFFSET, center_y - HITMARKER_GAP + HITMARKER_SHADOW_OFFSET),
+                HITMARKER_SHADOW_COLOR, HITMARKER_THICKNESS)
+        # Bottom-left to center shadow
+        cv2.line(frame,
+                (center_x - half_size + HITMARKER_SHADOW_OFFSET, center_y + half_size + HITMARKER_SHADOW_OFFSET),
+                (center_x - HITMARKER_GAP + HITMARKER_SHADOW_OFFSET, center_y + HITMARKER_GAP + HITMARKER_SHADOW_OFFSET),
+                HITMARKER_SHADOW_COLOR, HITMARKER_THICKNESS)
+        # Bottom-right to center shadow
+        cv2.line(frame,
+                (center_x + half_size + HITMARKER_SHADOW_OFFSET, center_y + half_size + HITMARKER_SHADOW_OFFSET),
+                (center_x + HITMARKER_GAP + HITMARKER_SHADOW_OFFSET, center_y + HITMARKER_GAP + HITMARKER_SHADOW_OFFSET),
+                HITMARKER_SHADOW_COLOR, HITMARKER_THICKNESS)
+    
+    # Draw main hitmarker
+    # Top-left to center
+    cv2.line(frame, 
+            (center_x - half_size, center_y - half_size),
+            (center_x - HITMARKER_GAP, center_y - HITMARKER_GAP),
+            color, HITMARKER_THICKNESS)
+    # Top-right to center
+    cv2.line(frame,
+            (center_x + half_size, center_y - half_size),
+            (center_x + HITMARKER_GAP, center_y - HITMARKER_GAP),
+            color, HITMARKER_THICKNESS)
+    # Bottom-left to center
+    cv2.line(frame,
+            (center_x - half_size, center_y + half_size),
+            (center_x - HITMARKER_GAP, center_y + HITMARKER_GAP),
+            color, HITMARKER_THICKNESS)
+    # Bottom-right to center
+    cv2.line(frame,
+            (center_x + half_size, center_y + half_size),
+            (center_x + HITMARKER_GAP, center_y + HITMARKER_GAP),
+            color, HITMARKER_THICKNESS)
+
+def draw_ad_boxes(frame, detected_objects, detect_keyword, box_style='censor'):
+    """Draw detection visualizations over detected objects.
+    
+    Args:
+        frame: The video frame to draw on
+        detected_objects: List of (box, keyword) tuples
+        detect_keyword: The detection keyword
+        box_style: Visualization style ('censor', 'yolo', or 'hitmarker')
+    """
     height, width = frame.shape[:2]
     
     for (box, keyword) in detected_objects:
@@ -251,10 +316,34 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword):
             
             # Only draw if box has reasonable size
             if x2 > x1 and y2 > y1:
-                # Draw solid black rectangle
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), -1)
+                if box_style == 'censor':
+                    # Draw solid black rectangle
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), -1)
+                elif box_style == 'yolo':
+                    # Draw red rectangle with thicker line
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
+                    
+                    # Add label with background
+                    label = detect_keyword  # Use exact capitalization
+                    label_size = cv2.getTextSize(label, FONT, 0.7, 2)[0]
+                    cv2.rectangle(frame, (x1, y1-25), (x1 + label_size[0], y1), (0, 0, 255), -1)
+                    cv2.putText(frame, label, (x1, y1-6), FONT, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
+                elif box_style == 'hitmarker':
+                    # Calculate center of the box
+                    center_x = (x1 + x2) // 2
+                    center_y = (y1 + y2) // 2
+                    
+                    # Draw hitmarker at the center
+                    draw_hitmarker(frame, center_x, center_y)
+                    
+                    # Optional: Add small label above hitmarker
+                    label = detect_keyword  # Use exact capitalization
+                    label_size = cv2.getTextSize(label, FONT, 0.5, 1)[0]
+                    cv2.putText(frame, label, 
+                              (center_x - label_size[0]//2, center_y - HITMARKER_SIZE - 5),
+                              FONT, 0.5, HITMARKER_COLOR, 1, cv2.LINE_AA)
         except Exception as e:
-            print(f"Error drawing censor bar: {str(e)}")
+            print(f"Error drawing {box_style} style box: {str(e)}")
     
     return frame
 
@@ -328,13 +417,13 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
     ad_detections = filter_temporal_outliers(ad_detections)
     return ad_detections
 
-def create_detection_video(video_path, ad_detections, detect_keyword, output_path=None, ffmpeg_preset='medium', test_mode=False):
+def create_detection_video(video_path, ad_detections, detect_keyword, output_path=None, ffmpeg_preset='medium', test_mode=False, box_style='censor'):
     """Create video with detection boxes."""
     if output_path is None:
         # Simplified output path without timestamp subdirectories
         os.makedirs('outputs', exist_ok=True)
         base_name = os.path.splitext(os.path.basename(video_path))[0]
-        output_path = os.path.join('outputs', f'censor_{detect_keyword}_{base_name}.mp4')
+        output_path = os.path.join('outputs', f'{box_style}_{detect_keyword}_{base_name}.mp4')
 
     props = get_video_properties(video_path)
     fps, width, height = props['fps'], props['width'], props['height']
@@ -371,8 +460,7 @@ def create_detection_video(video_path, ad_detections, detect_keyword, output_pat
             if frame_count_processed in ad_detections:
                 current_detections = ad_detections[frame_count_processed]
                 if current_detections:
-                    print(f"Drawing detections for frame {frame_count_processed}")
-                    frame = draw_ad_boxes(frame, current_detections, detect_keyword)
+                    frame = draw_ad_boxes(frame, current_detections, detect_keyword, box_style=box_style)
             
             out.write(frame)
             frame_count_processed += 1
@@ -396,7 +484,7 @@ def create_detection_video(video_path, ad_detections, detect_keyword, output_pat
     os.remove(temp_output)  # Remove the temporary file
     return output_path
 
-def process_video(video_path, detect_keyword, test_mode=False, ffmpeg_preset='medium', rows=1, cols=1):
+def process_video(video_path, detect_keyword, test_mode=False, ffmpeg_preset='medium', rows=1, cols=1, box_style='censor'):
     """Process a single video file."""
     print(f"\nProcessing: {video_path}")
     print(f"Looking for: {detect_keyword}")
@@ -409,7 +497,9 @@ def process_video(video_path, detect_keyword, test_mode=False, ffmpeg_preset='me
     ad_detections = describe_frames(video_path, model, tokenizer, detect_keyword, test_mode, rows, cols)
     
     # Create video with detection boxes
-    output_path = create_detection_video(video_path, ad_detections, detect_keyword, ffmpeg_preset=ffmpeg_preset, test_mode=test_mode)
+    output_path = create_detection_video(video_path, ad_detections, detect_keyword, 
+                                       ffmpeg_preset=ffmpeg_preset, test_mode=test_mode,
+                                       box_style=box_style)
     print(f"\nOutput saved to: {output_path}")
 
 def main():
@@ -424,6 +514,8 @@ def main():
                       help='Number of rows to split each frame into (default: 1)')
     parser.add_argument('--cols', type=int, default=1,
                       help='Number of columns to split each frame into (default: 1)')
+    parser.add_argument('--box-style', choices=['censor', 'yolo', 'hitmarker'], default='censor',
+                      help='Style of detection visualization (default: censor)')
     args = parser.parse_args()
     
     input_dir = 'inputs'
@@ -443,11 +535,12 @@ def main():
         print("Running in test mode - processing only first 3 seconds of each video")
     print(f"Using FFmpeg preset: {args.preset}")
     print(f"Grid size: {args.rows}x{args.cols}")
+    print(f"Box style: {args.box_style}")
     
     for video_file in video_files:
         video_path = os.path.join(input_dir, video_file)
         process_video(video_path, args.detect, test_mode=args.test, ffmpeg_preset=args.preset,
-                     rows=args.rows, cols=args.cols)
+                     rows=args.rows, cols=args.cols, box_style=args.box_style)
 
 if __name__ == "__main__":
     main()
