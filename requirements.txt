@@ -9,3 +9,7 @@ ffmpeg-python
 einops
 pyvips
 accelerate
+# for spaces
+--extra-index-url https://download.pytorch.org/whl/cu113
+torch
+spaces

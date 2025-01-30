@@ -4,14 +4,24 @@ import os
 from main import load_moondream, process_video
 import tempfile
 import shutil
+import torch
+import spaces
 
 # Get absolute path to workspace root
 WORKSPACE_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+# Check CUDA availability
+print(f"Is CUDA available: {torch.cuda.is_available()}")
+# We want to get True
+print(f"CUDA device: {torch.cuda.get_device_name(torch.cuda.current_device())}")
+# GPU Name
 
 # Initialize model globally for reuse
 print("Loading Moondream model...")
 model, tokenizer = load_moondream()
 
+# Uncomment for Hugging Face Spaces
+# @spaces.GPU(duration=120)
 def process_video_file(video_file, detect_keyword, box_style, ffmpeg_preset, rows, cols, test_mode):
     """Process a video file through the Gradio interface."""
     try:
