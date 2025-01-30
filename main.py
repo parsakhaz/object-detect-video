@@ -33,7 +33,6 @@ HITMARKER_COLOR = (255, 255, 255)  # White color for hitmarker
 HITMARKER_SHADOW_COLOR = (80, 80, 80)  # Lighter gray for shadow effect
 HITMARKER_SHADOW_OFFSET = 1  # Smaller shadow offset
 
-
 def load_moondream():
     """Load Moondream model and tokenizer."""
     model = AutoModelForCausalLM.from_pretrained(
