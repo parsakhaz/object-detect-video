@@ -5,8 +5,7 @@ from main import load_moondream, process_video
 import tempfile
 import shutil
 import torch
-
-# import spaces
+import spaces
 
 # Get absolute path to workspace root
 WORKSPACE_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -23,7 +22,7 @@ model, tokenizer = load_moondream()
 
 
 # Uncomment for Hugging Face Spaces
-# @spaces.GPU(duration=120)
+@spaces.GPU(duration=120)
 def process_video_file(
     video_file, detect_keyword, box_style, ffmpeg_preset, rows, cols, test_mode
 ):
