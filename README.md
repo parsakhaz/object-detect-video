@@ -1,3 +1,9 @@
+---
+title: redact-video-demo
+app_file: app.py
+sdk: gradio
+sdk_version: 5.13.2
+---
 # Video Object Detection with Moondream
 
 This tool uses Moondream2, a powerful yet lightweight vision-language model, to detect and visualize objects in videos. Moondream can recognize a wide variety of objects, people, text, and more with high accuracy while being much smaller than traditional models.
@@ -47,15 +53,15 @@ Links:
 ## Installation
 
 1. Clone this repository and create a new virtual environment
-~~~bash
+```bash
 git clone https://github.com/parsakhaz/object-detect-video.git
 python -m venv .venv
 source .venv/bin/activate
-~~~
+```
 2. Install the required packages:
-~~~bash
+```bash
 pip install -r requirements.txt
-~~~
+```
 3. Install ffmpeg:
    - On Ubuntu/Debian: `sudo apt-get install ffmpeg libvips`
    - On macOS: `brew install ffmpeg`
@@ -66,9 +72,9 @@ pip install -r requirements.txt
 ### Web Interface
 
 1. Start the web interface:
-~~~bash
+```bash
 python app.py
-~~~
+```
 
 2. Open the provided URL in your browser
 
@@ -82,9 +88,9 @@ python app.py
 ### Command Line Interface
 
 1. Create an `inputs` directory in the same folder as the script:
-~~~bash
+```bash
 mkdir inputs
-~~~
+```
 
 2. Place your video files in the `inputs` directory. Supported formats:
    - .mp4
@@ -94,46 +100,46 @@ mkdir inputs
    - .webm
 
 3. Run the script:
-~~~bash
+```bash
 python main.py
-~~~
+```
 
 ### Optional Arguments:
 - `--test`: Process only first 3 seconds of each video
-~~~bash
+```bash
 python main.py --test
-~~~
+```
 
 - `--preset`: Choose FFmpeg encoding preset (affects output quality vs. speed)
-~~~bash
+```bash
 python main.py --preset ultrafast  # Fastest, lower quality
 python main.py --preset veryslow   # Slowest, highest quality
-~~~
+```
 
 - `--detect`: Specify what object type to detect (using natural language)
-~~~bash
+```bash
 python main.py --detect person     # Detect people
 python main.py --detect "red car"  # Detect red cars
 python main.py --detect "person wearing a hat"  # Detect people with hats
-~~~
+```
 
 - `--box-style`: Choose visualization style
-~~~bash
+```bash
 python main.py --box-style censor     # Black boxes (default)
 python main.py --box-style yolo       # YOLO-style boxes with labels
 python main.py --box-style hitmarker  # COD-style hitmarkers
-~~~
+```
 
 - `--rows` and `--cols`: Enable grid-based detection by splitting frames
-~~~bash
+```bash
 python main.py --rows 2 --cols 2   # Split each frame into 2x2 grid
 python main.py --rows 3 --cols 3   # Split each frame into 3x3 grid
-~~~
+```
 
 You can combine arguments:
-~~~bash
+```bash
 python main.py --detect "person wearing sunglasses" --box-style yolo --test --preset "fast" --rows 2 --cols 2
-~~~
+```
 
 ### Visualization Styles
 
