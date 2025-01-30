@@ -12,7 +12,7 @@ WORKSPACE_ROOT = os.path.dirname(os.path.abspath(__file__))
 print("Loading Moondream model...")
 model, tokenizer = load_moondream()
 
-def process_video_file(video_file, detect_keyword, box_style, ffmpeg_preset, rows, cols):
+def process_video_file(video_file, detect_keyword, box_style, ffmpeg_preset, rows, cols, test_mode):
     """Process a video file through the Gradio interface."""
     try:
         if not video_file:
@@ -34,7 +34,7 @@ def process_video_file(video_file, detect_keyword, box_style, ffmpeg_preset, row
             output_path = process_video(
                 input_video_path,
                 detect_keyword,
-                test_mode=False,
+                test_mode=test_mode,
                 ffmpeg_preset=ffmpeg_preset,
                 rows=rows,
                 cols=cols,
@@ -112,45 +112,48 @@ with gr.Blocks(title="Video Object Detection with Moondream") as app:
                 rows_input = gr.Slider(minimum=1, maximum=4, value=1, step=1, label="Grid Rows")
                 cols_input = gr.Slider(minimum=1, maximum=4, value=1, step=1, label="Grid Columns")
             
+            test_mode_input = gr.Checkbox(
+                label="Test Mode (Process first 3 seconds only)", 
+                value=True,
+                info="Enable to quickly test settings on a short clip before processing the full video (recommended)"
+            )
+            
             process_btn = gr.Button("Process Video", variant="primary")
+            gr.Markdown("""
+            Note: Processing in test mode will only process the first 3 seconds of the video and is recommended for testing settings.
+            """)
+
+            gr.Markdown("""
+            We can get a rough estimate of how long the video will take to process by multiplying the videos framerate * seconds * the number of rows and columns and assuming 0.12 seconds processing time per detection.
+            For example, a 3 second video at 30fps with 2x2 grid, the estimated time is 3 * 30 * 2 * 2 * 0.12 = 43.2 seconds (tested on a 4090 GPU).
+            """)
         
         with gr.Column():
             # Output components
             video_output = gr.Video(label="Processed Video")
             
+            # About section under the video output
+            gr.Markdown("""
+            ### About Moondream
+            Moondream is a tiny yet powerful vision-language model that can analyze images and answer questions about them. 
+            It's designed to be lightweight and efficient while maintaining high accuracy. Some key features:
+            - Only 2B parameters (compared to 80B+ in other models)
+            - Fast inference with minimal resource requirements
+            - Supports CPU and GPU execution
+            - Open source and free to use
+            
+            Links:
+            - [GitHub Repository](https://github.com/vikhyat/moondream)
+            - [Hugging Face Space](https://huggingface.co/vikhyatk/moondream2)
+            - [Python Package](https://pypi.org/project/moondream/)
+            """)
+            
     # Event handlers
     process_btn.click(
         fn=process_video_file,
-        inputs=[video_input, detect_input, box_style_input, preset_input, rows_input, cols_input],
+        inputs=[video_input, detect_input, box_style_input, preset_input, rows_input, cols_input, test_mode_input],
         outputs=video_output
     )
-    
-    gr.Markdown("""
-    ### Instructions
-    1. Upload a video file
-    2. Enter what you want to detect (e.g., 'face', 'logo', 'text')
-    3. Choose visualization style:
-        - Censor: Black boxes over detected objects
-        - YOLO: Traditional bounding boxes with labels
-        - Hitmarker: Call of Duty style crosshair markers
-    4. Adjust processing settings if needed:
-        - Processing Speed: Faster presets process quicker but may reduce quality
-        - Grid Size: Larger grids can help detect smaller objects but process slower
-    5. Click 'Process Video' and wait for the result
-    
-    ### About Moondream
-    Moondream is a tiny yet powerful vision-language model that can analyze images and answer questions about them. 
-    It's designed to be lightweight and efficient while maintaining high accuracy. Some key features:
-    - Only 2B parameters (compared to 80B+ in other models)
-    - Fast inference with minimal resource requirements
-    - Supports CPU and GPU execution
-    - Open source and free to use
-    
-    Links:
-    - [GitHub Repository](https://github.com/vikhyat/moondream)
-    - [Hugging Face Space](https://huggingface.co/vikhyatk/moondream2)
-    - [Python Package](https://pypi.org/project/moondream/)
-    """)
 
 if __name__ == "__main__":
     app.launch(share=True)
