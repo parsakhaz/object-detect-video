@@ -1,9 +1,3 @@
----
-title: redact-video-demo
-app_file: app.py
-sdk: gradio
-sdk_version: 5.13.2
----
 # Video Object Detection with Moondream
 
 This tool uses Moondream2, a powerful yet lightweight vision-language model, to detect and visualize objects in videos. Moondream can recognize a wide variety of objects, people, text, and more with high accuracy while being much smaller than traditional models.
@@ -20,8 +14,8 @@ Moondream is a tiny yet powerful vision-language model that can analyze images a
 
 Links:
 - [GitHub Repository](https://github.com/vikhyat/moondream)
-- [Hugging Face Space](https://huggingface.co/vikhyatk/moondream2)
-- [Python Package](https://pypi.org/project/moondream/)
+- [Hugging Face](https://huggingface.co/vikhyatk/moondream2)
+- [Build with Moondream](http://docs.moondream.ai/)
 
 ## Features
 
@@ -131,7 +125,7 @@ python main.py --box-style hitmarker  # COD-style hitmarkers
 ```
 
 - `--rows` and `--cols`: Enable grid-based detection by splitting frames
-~~~bash
+```bash
 python main.py --rows 2 --cols 2   # Split each frame into 2x2 grid
 python main.py --rows 3 --cols 3   # Split each frame into 3x3 grid
 ```
