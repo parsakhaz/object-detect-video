@@ -1,26 +1,42 @@
-# Moondream Video Object Detector
+---
+title: redact-video-demo
+app_file: app.py
+sdk: gradio
+sdk_version: 5.13.2
+---
+# Video Object Detection with Moondream
 
-This tool automatically detects and highlights objects in videos using the Moondream2 vision-language model. It's designed for flexible object detection tasks like tracking faces in interviews, finding license plates in traffic footage, or monitoring specific objects across video segments.
+This tool uses Moondream2, a powerful yet lightweight vision-language model, to detect and visualize objects in videos. Moondream can recognize a wide variety of objects, people, text, and more with high accuracy while being much smaller than traditional models.
 
-## Common Use Cases
+## About Moondream
 
-- Face Detection: Track faces in interviews, meetings, or surveillance footage
-- License Plate Recognition: Monitor traffic cameras or parking lot footage
-- Object Tracking: Follow specific items through retail or warehouse videos
-- Security Monitoring: Detect people or vehicles in surveillance footage
-- Video Segments: Process specific time ranges for targeted analysis
-- Batch Processing: Handle multiple video files with consistent detection settings
+Moondream is a tiny yet powerful vision-language model that can analyze images and answer questions about them. It's designed to be lightweight and efficient while maintaining high accuracy. Some key features:
+
+- Only 2B parameters
+- Fast inference with minimal resource requirements
+- Supports CPU and GPU execution
+- Open source and free to use
+- Can detect almost anything you can describe in natural language
+
+Links:
+- [GitHub Repository](https://github.com/vikhyat/moondream)
+- [Hugging Face Space](https://huggingface.co/vikhyatk/moondream2)
+- [Python Package](https://pypi.org/project/moondream/)
 
 ## Features
 
-- Real-time object detection in videos
-- Grid-based detection for improved accuracy on large frames
-- Flexible object type detection (faces, license plates, people, vehicles, etc.)
-- Temporal smoothing for stable bounding boxes
-- Frame-by-frame processing with IoU tracking
-- Process full videos or specific segments using --test mode
+- Real-time object detection in videos using Moondream2
+- Multiple visualization styles:
+  - Censor: Black boxes over detected objects
+  - YOLO: Traditional bounding boxes with labels
+  - Hitmarker: Call of Duty style crosshair markers
+- Optional grid-based detection for improved accuracy
+- Flexible object type detection using natural language
+- Frame-by-frame processing with IoU-based merging
+- Batch processing of multiple videos
 - Web-compatible output format
-- Configurable detection parameters
+- User-friendly web interface
+- Command-line interface for automation
 
 ## Requirements
 
@@ -32,6 +48,7 @@ This tool automatically detects and highlights objects in videos using the Moond
 - tqdm
 - ffmpeg
 - numpy
+- gradio (for web interface)
 
 ## Installation
 
@@ -51,6 +68,24 @@ pip install -r requirements.txt
    - On Windows: Download from [ffmpeg.org](https://ffmpeg.org/download.html)
 
 ## Usage
+
+### Web Interface
+
+1. Start the web interface:
+```bash
+python app.py
+```
+
+2. Open the provided URL in your browser
+
+3. Use the interface to:
+   - Upload your video
+   - Specify what to censor (e.g., face, logo, text)
+   - Adjust processing speed and quality
+   - Configure grid size for detection
+   - Process and download the censored video
+
+### Command Line Interface
 
 1. Create an `inputs` directory in the same folder as the script:
 ~~~bash
@@ -81,59 +116,67 @@ python main.py --preset ultrafast  # Fastest, lower quality
 python main.py --preset veryslow   # Slowest, highest quality
 ~~~
 
-- `--detect`: Specify what object type to detect (defaults to "face")
-~~~bash
-python main.py --detect "license plate"  # Detect license plates
+- `--detect`: Specify what object type to detect (using natural language)
+```bash
 python main.py --detect person     # Detect people
-python main.py --detect "security camera"  # Detect security cameras
-python main.py --detect face       # Detect faces (default)
-~~~
+python main.py --detect "red car"  # Detect red cars
+python main.py --detect "person wearing a hat"  # Detect people with hats
+```
+
+- `--box-style`: Choose visualization style
+```bash
+python main.py --box-style censor     # Black boxes (default)
+python main.py --box-style yolo       # YOLO-style boxes with labels
+python main.py --box-style hitmarker  # COD-style hitmarkers
+```
 
 - `--rows` and `--cols`: Enable grid-based detection by splitting frames
 ~~~bash
 python main.py --rows 2 --cols 2   # Split each frame into 2x2 grid
 python main.py --rows 3 --cols 3   # Split each frame into 3x3 grid
-python main.py --rows 2 --cols 4 --detect face   # Split each frame into 2x4 grid and detect face
-~~~
+```
 
 You can combine arguments:
-~~~bash
-python main.py --detect "license plate" --test --preset fast --rows 2 --cols 2
-~~~
+```bash
+python main.py --detect "person wearing sunglasses" --box-style yolo --test --preset "fast" --rows 2 --cols 2
+```
 
-## Detection Parameters
+### Visualization Styles
 
-The script uses several parameters for optimal object detection:
+The tool supports three different visualization styles for detected objects:
 
-- Frame Processing: Every frame is analyzed for the specified object
-- Grid Processing: Optional frame splitting for better detection of small objects
-- IoU Threshold: 0.5 (standard threshold for box matching)
-- EMA Smoothing: Alpha = 0.6 (more responsive to changes)
-- Temporal Window: 3 frames (for smoothing box movements)
-- Full-screen Filter: Ignores detections covering >98% of both dimensions
+1. **Censor** (default)
+   - Places solid black rectangles over detected objects
+   - Best for privacy and content moderation
+   - Completely obscures the detected region
 
-### Grid-based Detection
+2. **YOLO**
+   - Traditional object detection style
+   - Red bounding box around detected objects
+   - Label showing object type above the box
+   - Good for analysis and debugging
 
-The grid-based detection feature splits each frame into smaller tiles before processing. This can improve detection accuracy by:
-- Allowing the model to focus on smaller regions
-- Better detecting small objects that might be missed in full-frame analysis
-- Reducing the impact of scale on detection performance
+3. **Hitmarker**
+   - Call of Duty inspired visualization
+   - White crosshair marker at center of detected objects
+   - Small label above the marker
+   - Stylistic choice for gaming-inspired visualization
 
-The trade-offs are:
-- Increased processing time (proportional to number of grid cells)
-- Potential for duplicate detections (handled by NMS merging)
-- Memory usage increases with grid size
+Choose the style that best fits your use case using the `--box-style` argument.
 
 ## Output
 
 Processed videos will be saved in the `outputs` directory with the format:
-`detected_[original_filename]_web.mp4`
+`[style]_[object_type]_[original_filename].mp4`
+
+For example:
+- `censor_face_video.mp4`
+- `yolo_person_video.mp4`
+- `hitmarker_car_video.mp4`
 
 The output videos will include:
 - Original video content
-- Red bounding boxes around detected objects
-- Box labels showing the detected object type
-- Temporally smoothed detections
+- Selected visualization style for detected objects
 - Web-compatible H.264 encoding
 
 ## Notes
@@ -142,6 +185,8 @@ The output videos will include:
 - GPU is strongly recommended for faster processing
 - Requires sufficient disk space for temporary files
 - Detection quality may vary based on object type and video quality
-- Temporal smoothing helps reduce jitter in bounding boxes while maintaining responsiveness
 - Detection accuracy depends on Moondream2's ability to recognize the specified object type
-- Grid size should be chosen based on video resolution and object size 
+- Grid-based detection should only be used when necessary due to significant performance impact
+- Web interface provides real-time progress updates and error messages
+- Different visualization styles may be more suitable for different use cases
+- Moondream can detect almost anything you can describe in natural language

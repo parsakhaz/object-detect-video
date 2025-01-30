@@ -5,20 +5,23 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 import numpy as np
+from datetime import datetime
 
 # Constants
-FRAME_INTERVAL = 1  # Process every frame
-BATCH_SIZE = 8      # Process 8 frames at a time
-FONT = cv2.FONT_HERSHEY_SIMPLEX
-FONT_SCALE = 0.7
-MARGIN = 10
-PADDING = 10
-MIN_LINE_HEIGHT = 20
 TEST_MODE_DURATION = 3  # Process only first 3 seconds in test mode
 FFMPEG_PRESETS = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow']
+FONT = cv2.FONT_HERSHEY_SIMPLEX  # Font for YOLO-style labels
 
 # Detection parameters
 IOU_THRESHOLD = 0.5  # IoU threshold for considering boxes related
+
+# Hitmarker parameters
+HITMARKER_SIZE = 20  # Size of the hitmarker in pixels
+HITMARKER_GAP = 3    # Size of the empty space in the middle (reduced from 8)
+HITMARKER_THICKNESS = 2  # Thickness of hitmarker lines
+HITMARKER_COLOR = (255, 255, 255)  # White color for hitmarker
+HITMARKER_SHADOW_COLOR = (80, 80, 80)  # Lighter gray for shadow effect
+HITMARKER_SHADOW_OFFSET = 1  # Smaller shadow offset
 
 def load_moondream():
     """Load Moondream model and tokenizer."""
@@ -218,13 +221,10 @@ def detect_ads_in_frame_single(model, tokenizer, image, detect_keyword):
     
     # Detect objects
     response = model.detect(image, detect_keyword)
-    print(f"\nDetection response for '{detect_keyword}':")
-    print(response)
     
     # Check if we have valid objects
     if response and "objects" in response and response["objects"]:
         objects = response["objects"]
-        print(f"Found {len(objects)} potential {detect_keyword} region(s)")
         
         for obj in objects:
             if all(k in obj for k in ['x_min', 'y_min', 'x_max', 'y_max']):
@@ -237,12 +237,67 @@ def detect_ads_in_frame_single(model, tokenizer, image, detect_keyword):
                 # If box is valid (not full-frame), add it
                 if is_valid_box(box):
                     detected_objects.append((box, detect_keyword))
-                    print(f"Added valid detection: {box}")
     
     return detected_objects
 
-def draw_ad_boxes(frame, detected_objects, detect_keyword):
-    """Draw bounding boxes around detected objects."""
+def draw_hitmarker(frame, center_x, center_y, size=HITMARKER_SIZE, color=HITMARKER_COLOR, shadow=True):
+    """Draw a COD-style hitmarker cross with more space in the middle."""
+    half_size = size // 2
+    
+    # Draw shadow first if enabled
+    if shadow:
+        # Top-left to center shadow
+        cv2.line(frame, 
+                (center_x - half_size + HITMARKER_SHADOW_OFFSET, center_y - half_size + HITMARKER_SHADOW_OFFSET),
+                (center_x - HITMARKER_GAP + HITMARKER_SHADOW_OFFSET, center_y - HITMARKER_GAP + HITMARKER_SHADOW_OFFSET),
+                HITMARKER_SHADOW_COLOR, HITMARKER_THICKNESS)
+        # Top-right to center shadow
+        cv2.line(frame,
+                (center_x + half_size + HITMARKER_SHADOW_OFFSET, center_y - half_size + HITMARKER_SHADOW_OFFSET),
+                (center_x + HITMARKER_GAP + HITMARKER_SHADOW_OFFSET, center_y - HITMARKER_GAP + HITMARKER_SHADOW_OFFSET),
+                HITMARKER_SHADOW_COLOR, HITMARKER_THICKNESS)
+        # Bottom-left to center shadow
+        cv2.line(frame,
+                (center_x - half_size + HITMARKER_SHADOW_OFFSET, center_y + half_size + HITMARKER_SHADOW_OFFSET),
+                (center_x - HITMARKER_GAP + HITMARKER_SHADOW_OFFSET, center_y + HITMARKER_GAP + HITMARKER_SHADOW_OFFSET),
+                HITMARKER_SHADOW_COLOR, HITMARKER_THICKNESS)
+        # Bottom-right to center shadow
+        cv2.line(frame,
+                (center_x + half_size + HITMARKER_SHADOW_OFFSET, center_y + half_size + HITMARKER_SHADOW_OFFSET),
+                (center_x + HITMARKER_GAP + HITMARKER_SHADOW_OFFSET, center_y + HITMARKER_GAP + HITMARKER_SHADOW_OFFSET),
+                HITMARKER_SHADOW_COLOR, HITMARKER_THICKNESS)
+    
+    # Draw main hitmarker
+    # Top-left to center
+    cv2.line(frame, 
+            (center_x - half_size, center_y - half_size),
+            (center_x - HITMARKER_GAP, center_y - HITMARKER_GAP),
+            color, HITMARKER_THICKNESS)
+    # Top-right to center
+    cv2.line(frame,
+            (center_x + half_size, center_y - half_size),
+            (center_x + HITMARKER_GAP, center_y - HITMARKER_GAP),
+            color, HITMARKER_THICKNESS)
+    # Bottom-left to center
+    cv2.line(frame,
+            (center_x - half_size, center_y + half_size),
+            (center_x - HITMARKER_GAP, center_y + HITMARKER_GAP),
+            color, HITMARKER_THICKNESS)
+    # Bottom-right to center
+    cv2.line(frame,
+            (center_x + half_size, center_y + half_size),
+            (center_x + HITMARKER_GAP, center_y + HITMARKER_GAP),
+            color, HITMARKER_THICKNESS)
+
+def draw_ad_boxes(frame, detected_objects, detect_keyword, box_style='censor'):
+    """Draw detection visualizations over detected objects.
+    
+    Args:
+        frame: The video frame to draw on
+        detected_objects: List of (box, keyword) tuples
+        detect_keyword: The detection keyword
+        box_style: Visualization style ('censor', 'yolo', or 'hitmarker')
+    """
     height, width = frame.shape[:2]
     
     for (box, keyword) in detected_objects:
@@ -261,51 +316,61 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword):
             
             # Only draw if box has reasonable size
             if x2 > x1 and y2 > y1:
-                # Draw red rectangle with thicker line
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
-                
-                # Add label
-                label = detect_keyword.capitalize()
-                label_size = cv2.getTextSize(label, FONT, 0.7, 2)[0]
-                cv2.rectangle(frame, (x1, y1-25), (x1 + label_size[0], y1), (0, 0, 255), -1)
-                cv2.putText(frame, label, (x1, y1-6), FONT, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
-                
-                print(f"Drew box at coordinates: ({x1}, {y1}) to ({x2}, {y2})")
+                if box_style == 'censor':
+                    # Draw solid black rectangle
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), -1)
+                elif box_style == 'yolo':
+                    # Draw red rectangle with thicker line
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
+                    
+                    # Add label with background
+                    label = detect_keyword  # Use exact capitalization
+                    label_size = cv2.getTextSize(label, FONT, 0.7, 2)[0]
+                    cv2.rectangle(frame, (x1, y1-25), (x1 + label_size[0], y1), (0, 0, 255), -1)
+                    cv2.putText(frame, label, (x1, y1-6), FONT, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
+                elif box_style == 'hitmarker':
+                    # Calculate center of the box
+                    center_x = (x1 + x2) // 2
+                    center_y = (y1 + y2) // 2
+                    
+                    # Draw hitmarker at the center
+                    draw_hitmarker(frame, center_x, center_y)
+                    
+                    # Optional: Add small label above hitmarker
+                    label = detect_keyword  # Use exact capitalization
+                    label_size = cv2.getTextSize(label, FONT, 0.5, 1)[0]
+                    cv2.putText(frame, label, 
+                              (center_x - label_size[0]//2, center_y - HITMARKER_SIZE - 5),
+                              FONT, 0.5, HITMARKER_COLOR, 1, cv2.LINE_AA)
         except Exception as e:
-            print(f"Error drawing box {box}: {str(e)}")
+            print(f"Error drawing {box_style} style box: {str(e)}")
     
     return frame
 
-def filter_temporal_outliers(detections_dict, max_size_change=0.15):
-    """Filter out sudden large changes in detection sizes by replacing with last valid frame.
+def filter_temporal_outliers(detections_dict):
+    """Filter out extremely large detections that take up most of the frame.
+    Only keeps detections that are reasonable in size.
     
     Args:
-        detections_dict: Dictionary of {timestamp: [(box, keyword), ...]}
-        max_size_change: Maximum allowed relative size change between consecutive frames
+        detections_dict: Dictionary of {frame_number: [(box, keyword), ...]}
     """
-    timestamps = sorted(detections_dict.keys())
-    if len(timestamps) < 2:
-        return detections_dict
-    
     filtered_detections = {}
-    prev_detections = None
-    prev_sizes = None
     
-    for t in timestamps:
-        current_detections = detections_dict[t]
-        current_sizes = [(box[2] - box[0]) * (box[3] - box[1]) for box, _ in current_detections]
+    for t, detections in detections_dict.items():
+        # Only keep detections that aren't too large
+        valid_detections = []
+        for box, keyword in detections:
+            # Calculate box size as percentage of frame
+            width = box[2] - box[0]
+            height = box[3] - box[1]
+            area = width * height
+            
+            # If box is less than 90% of frame, keep it
+            if area < 0.9:
+                valid_detections.append((box, keyword))
         
-        if prev_sizes is not None:
-            # Check if any detection size changed dramatically
-            size_changes = [abs(curr/prev - 1) for curr, prev in zip(current_sizes, prev_sizes)]
-            if any(change > max_size_change for change in size_changes):
-                print(f"Replacing frame at {t}s with previous frame due to large size change")
-                filtered_detections[t] = prev_detections
-                continue
-        
-        filtered_detections[t] = current_detections
-        prev_detections = current_detections
-        prev_sizes = current_sizes
+        if valid_detections:
+            filtered_detections[t] = valid_detections
     
     return filtered_detections
 
@@ -320,7 +385,7 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
     else:
         frame_count = props['frame_count']
     
-    ad_detections = {}  # Store detection results by timestamp
+    ad_detections = {}  # Store detection results by frame number
     
     print("Extracting frames and detecting objects...")
     video = cv2.VideoCapture(video_path)
@@ -333,17 +398,11 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
             if not ret:
                 break
             
-            # Calculate exact timestamp for this frame
-            timestamp = frame_count_processed / fps
-            
             # Detect objects in the frame
             detected_objects = detect_ads_in_frame(model, tokenizer, frame, detect_keyword, rows=rows, cols=cols)
             
-            if detected_objects:
-                ad_detections[timestamp] = detected_objects
-                print(f"\nFrame {frame_count_processed} (t={timestamp:.3f}s) detections:")
-                for box, keyword in detected_objects:
-                    print(f"- {keyword}: {box}")
+            # Store results for every frame, even if empty
+            ad_detections[frame_count_processed] = detected_objects
             
             frame_count_processed += 1
             pbar.update(1)
@@ -354,17 +413,27 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
         print("No frames could be read from video")
         return {}
     
-    # Add temporal filtering before returning
+    # Filter out only extremely large detections
     ad_detections = filter_temporal_outliers(ad_detections)
     return ad_detections
 
-def create_detection_video(video_path, ad_detections, detect_keyword, output_path=None, ffmpeg_preset='medium', test_mode=False):
+def create_detection_video(video_path, ad_detections, detect_keyword, output_path=None, ffmpeg_preset='medium', test_mode=False, box_style='censor'):
     """Create video with detection boxes."""
     if output_path is None:
-        os.makedirs('outputs', exist_ok=True)
+        # Create outputs directory if it doesn't exist
+        outputs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'outputs')
+        os.makedirs(outputs_dir, exist_ok=True)
+        
+        # Clean the detect_keyword for filename
+        safe_keyword = "".join(x for x in detect_keyword if x.isalnum() or x in (' ', '_', '-'))
+        safe_keyword = safe_keyword.replace(' ', '_')
+        
+        # Create output filename
         base_name = os.path.splitext(os.path.basename(video_path))[0]
-        output_path = os.path.join('outputs', f'detected_{base_name}_web.mp4')
-
+        output_path = os.path.join(outputs_dir, f'{box_style}_{safe_keyword}_{base_name}.mp4')
+    
+    print(f"Will save output to: {output_path}")
+    
     props = get_video_properties(video_path)
     fps, width, height = props['fps'], props['width'], props['height']
     
@@ -376,18 +445,16 @@ def create_detection_video(video_path, ad_detections, detect_keyword, output_pat
     
     video = cv2.VideoCapture(video_path)
     
-    # Use more efficient temporary codec
-    temp_output = output_path.replace('_web.mp4', '_temp.mp4')
+    # Create temp output path by adding _temp before the extension
+    base, ext = os.path.splitext(output_path)
+    temp_output = f"{base}_temp{ext}"
+    
     out = cv2.VideoWriter(
         temp_output,
         cv2.VideoWriter_fourcc(*'mp4v'),
         fps,
         (width, height)
     )
-    
-    # Get timestamps where we have detections
-    detection_times = sorted(ad_detections.keys())
-    print(f"Total frames with detections: {len(detection_times)}")
     
     print("Creating detection video...")
     frame_count_processed = 0
@@ -398,19 +465,11 @@ def create_detection_video(video_path, ad_detections, detect_keyword, output_pat
             if not ret:
                 break
             
-            # Calculate exact timestamp for this frame
-            timestamp = frame_count_processed / fps
-            
-            # Find closest detection time
-            current_detections = None
-            for t in detection_times:
-                if abs(t - timestamp) < 1/fps:  # Within one frame duration
-                    current_detections = ad_detections[t]
-                    break
-            
-            if current_detections:
-                print(f"Drawing detections for frame {frame_count_processed} (t={timestamp:.3f}s)")
-                frame = draw_ad_boxes(frame, current_detections, detect_keyword)
+            # Get detections for this exact frame
+            if frame_count_processed in ad_detections:
+                current_detections = ad_detections[frame_count_processed]
+                if current_detections:
+                    frame = draw_ad_boxes(frame, current_detections, detect_keyword, box_style=box_style)
             
             out.write(frame)
             frame_count_processed += 1
@@ -420,21 +479,33 @@ def create_detection_video(video_path, ad_detections, detect_keyword, output_pat
     out.release()
     
     # Convert to web-compatible format more efficiently
-    subprocess.run([
-        'ffmpeg', '-y',
-        '-i', temp_output,
-        '-c:v', 'libx264',
-        '-preset', ffmpeg_preset,
-        '-crf', '23',
-        '-movflags', '+faststart',  # Better web playback
-        '-loglevel', 'error',
-        output_path
-    ])
-    
-    os.remove(temp_output)  # Remove the temporary file
-    return output_path
+    try:
+        subprocess.run([
+            'ffmpeg', '-y',
+            '-i', temp_output,
+            '-c:v', 'libx264',
+            '-preset', ffmpeg_preset,
+            '-crf', '23',
+            '-movflags', '+faststart',  # Better web playback
+            '-loglevel', 'error',
+            output_path
+        ], check=True)
+        
+        os.remove(temp_output)  # Remove the temporary file
+        
+        if not os.path.exists(output_path):
+            print(f"Warning: FFmpeg completed but output file not found at {output_path}")
+            return None
+            
+        return output_path
+        
+    except subprocess.CalledProcessError as e:
+        print(f"Error running FFmpeg: {str(e)}")
+        if os.path.exists(temp_output):
+            os.remove(temp_output)
+        return None
 
-def process_video(video_path, detect_keyword, test_mode=False, ffmpeg_preset='medium', rows=1, cols=1):
+def process_video(video_path, detect_keyword, test_mode=False, ffmpeg_preset='medium', rows=1, cols=1, box_style='censor'):
     """Process a single video file."""
     print(f"\nProcessing: {video_path}")
     print(f"Looking for: {detect_keyword}")
@@ -447,8 +518,16 @@ def process_video(video_path, detect_keyword, test_mode=False, ffmpeg_preset='me
     ad_detections = describe_frames(video_path, model, tokenizer, detect_keyword, test_mode, rows, cols)
     
     # Create video with detection boxes
-    output_path = create_detection_video(video_path, ad_detections, detect_keyword, ffmpeg_preset=ffmpeg_preset, test_mode=test_mode)
+    output_path = create_detection_video(video_path, ad_detections, detect_keyword, 
+                                       ffmpeg_preset=ffmpeg_preset, test_mode=test_mode,
+                                       box_style=box_style)
+    
+    if output_path is None:
+        print("\nError: Failed to create output video")
+        return None
+        
     print(f"\nOutput saved to: {output_path}")
+    return output_path
 
 def main():
     """Process all videos in the inputs directory."""
@@ -462,6 +541,8 @@ def main():
                       help='Number of rows to split each frame into (default: 1)')
     parser.add_argument('--cols', type=int, default=1,
                       help='Number of columns to split each frame into (default: 1)')
+    parser.add_argument('--box-style', choices=['censor', 'yolo', 'hitmarker'], default='censor',
+                      help='Style of detection visualization (default: censor)')
     args = parser.parse_args()
     
     input_dir = 'inputs'
@@ -469,8 +550,7 @@ def main():
     os.makedirs('outputs', exist_ok=True)
     
     video_files = [f for f in os.listdir(input_dir) 
-                   if f.lower().endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm'))
-                   and not f.startswith('captioned_')]
+                   if f.lower().endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm'))]
     
     if not video_files:
         print("No video files found in 'inputs' directory")
@@ -482,11 +562,17 @@ def main():
         print("Running in test mode - processing only first 3 seconds of each video")
     print(f"Using FFmpeg preset: {args.preset}")
     print(f"Grid size: {args.rows}x{args.cols}")
+    print(f"Box style: {args.box_style}")
     
+    success_count = 0
     for video_file in video_files:
         video_path = os.path.join(input_dir, video_file)
-        process_video(video_path, args.detect, test_mode=args.test, ffmpeg_preset=args.preset,
-                     rows=args.rows, cols=args.cols)
+        output_path = process_video(video_path, args.detect, test_mode=args.test, ffmpeg_preset=args.preset,
+                     rows=args.rows, cols=args.cols, box_style=args.box_style)
+        if output_path:
+            success_count += 1
+    
+    print(f"\nProcessing complete. Successfully processed {success_count} out of {len(video_files)} videos.")
 
 if __name__ == "__main__":
     main()
