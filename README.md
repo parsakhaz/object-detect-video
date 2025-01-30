@@ -2,6 +2,8 @@
 
 This tool uses Moondream 2B, a powerful yet lightweight vision-language model, to detect and redact objects from videos. Moondream can recognize a wide variety of objects, people, text, and more with high accuracy while being much smaller than traditional models. 
 
+Try it out on our [Hugging Face space](https://huggingface.co/spaces/moondream/promptable-video-redaction).
+
 ## About Moondream
 
 Moondream is a tiny yet powerful vision-language model that can analyze images and answer questions about them. It's designed to be lightweight and efficient while maintaining high accuracy. Some key features:
