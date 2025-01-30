@@ -47,3 +47,5 @@ outputs/
 
 # Logs
 *.log
+
+certificate.pem

@@ -53,15 +53,15 @@ Links:
 ## Installation
 
 1. Clone this repository and create a new virtual environment
-```bash
+~~~bash
 git clone https://github.com/parsakhaz/object-detect-video.git
 python -m venv .venv
 source .venv/bin/activate
-```
+~~~
 2. Install the required packages:
-```bash
+~~~bash
 pip install -r requirements.txt
-```
+~~~
 3. Install ffmpeg:
    - On Ubuntu/Debian: `sudo apt-get install ffmpeg libvips`
    - On macOS: `brew install ffmpeg`
@@ -88,9 +88,9 @@ python app.py
 ### Command Line Interface
 
 1. Create an `inputs` directory in the same folder as the script:
-```bash
+~~~bash
 mkdir inputs
-```
+~~~
 
 2. Place your video files in the `inputs` directory. Supported formats:
    - .mp4
@@ -100,21 +100,21 @@ mkdir inputs
    - .webm
 
 3. Run the script:
-```bash
+~~~bash
 python main.py
-```
+~~~
 
 ### Optional Arguments:
-- `--test`: Process only first 3 seconds of each video
-```bash
+- `--test`: Process only first 3 seconds of each video (useful for testing detection settings)
+~~~bash
 python main.py --test
-```
+~~~
 
 - `--preset`: Choose FFmpeg encoding preset (affects output quality vs. speed)
-```bash
+~~~bash
 python main.py --preset ultrafast  # Fastest, lower quality
 python main.py --preset veryslow   # Slowest, highest quality
-```
+~~~
 
 - `--detect`: Specify what object type to detect (using natural language)
 ```bash
@@ -131,7 +131,7 @@ python main.py --box-style hitmarker  # COD-style hitmarkers
 ```
 
 - `--rows` and `--cols`: Enable grid-based detection by splitting frames
-```bash
+~~~bash
 python main.py --rows 2 --cols 2   # Split each frame into 2x2 grid
 python main.py --rows 3 --cols 3   # Split each frame into 3x3 grid
 ```
