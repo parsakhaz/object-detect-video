@@ -58,7 +58,7 @@ source .venv/bin/activate
 ```bash
 pip install -r requirements.txt
 ```
-3. Install ffmpeg:
+3. Install ffmpeg and libvips:
    - On Ubuntu/Debian: `sudo apt-get install ffmpeg libvips`
    - On macOS: `brew install ffmpeg`
    - On Windows: Download from [ffmpeg.org](https://ffmpeg.org/download.html)
