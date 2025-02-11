@@ -1,5 +1,6 @@
 gradio>=4.0.0
 torch
+# if on windows: pip install torch==2.5.1+cu121 torchvision==0.20.1+cu121 --index-url https://download.pytorch.org/whl/cu121
 transformers
 opencv-python
 pillow
@@ -13,3 +14,6 @@ accelerate
 --extra-index-url https://download.pytorch.org/whl/cu113
 torch
 spaces
+# SAM dependencies
+torchvision
+colorsys

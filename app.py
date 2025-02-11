@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import gradio as gr
 import os
-from main import load_moondream, process_video
+from main import load_moondream, process_video, load_sam_model
 import tempfile
 import shutil
 import torch
@@ -17,9 +17,11 @@ print(f"Is CUDA available: {torch.cuda.is_available()}")
 print(f"CUDA device: {torch.cuda.get_device_name(torch.cuda.current_device())}")
 # GPU Name
 
-# Initialize model globally for reuse
+# Initialize models globally for reuse
 print("Loading Moondream model...")
 model, tokenizer = load_moondream()
+print("Loading SAM model...")
+sam_model, sam_processor = load_sam_model()
 
 
 # Uncomment for Hugging Face Spaces
@@ -133,10 +135,10 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
 
             with gr.Accordion("Advanced Settings", open=False):
                 box_style_input = gr.Radio(
-                    choices=["censor", "bounding-box", "hitmarker"],
+                    choices=["censor", "bounding-box", "hitmarker", "sam", "sam-fast"],
                     value="censor",
                     label="Visualization Style",
-                    info="Choose how to display detections",
+                    info="Choose how to display detections: censor (black boxes), bounding-box (red boxes with labels), hitmarker (COD-style markers), sam (precise segmentation), or sam-fast (faster but less precise segmentation)",
                 )
                 preset_input = gr.Dropdown(
                     choices=[
@@ -177,6 +179,8 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
                     """
                 We can get a rough estimate of how long the video will take to process by multiplying the videos framerate * seconds * the number of rows and columns and assuming 0.12 seconds processing time per detection.
                 For example, a 3 second video at 30fps with 2x2 grid, the estimated time is 3 * 30 * 2 * 2 * 0.12 = 43.2 seconds (tested on a 4090 GPU).
+                
+                Note: Using the SAM visualization style will increase processing time significantly as it performs additional segmentation for each detection. The sam-fast option uses a smaller model for faster processing at the cost of some accuracy.
                 """
                 )
 

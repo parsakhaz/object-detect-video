@@ -2,10 +2,12 @@
 import cv2, os, subprocess, argparse
 from PIL import Image
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, SamModel, SamProcessor
 from tqdm import tqdm
 import numpy as np
 from datetime import datetime
+import colorsys
+import random
 
 # Constants
 TEST_MODE_DURATION = 3  # Process only first 3 seconds in test mode
@@ -33,6 +35,96 @@ HITMARKER_COLOR = (255, 255, 255)  # White color for hitmarker
 HITMARKER_SHADOW_COLOR = (80, 80, 80)  # Lighter gray for shadow effect
 HITMARKER_SHADOW_OFFSET = 1  # Smaller shadow offset
 
+# SAM parameters
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+sam_model = None
+sam_processor = None
+slimsam_model = None
+slimsam_processor = None
+
+def load_sam_model(slim=False):
+    """Load SAM model and processor."""
+    global sam_model, sam_processor, slimsam_model, slimsam_processor
+    
+    if slim:
+        if slimsam_model is None:
+            slimsam_model = SamModel.from_pretrained("nielsr/slimsam-50-uniform").to(device)
+            slimsam_processor = SamProcessor.from_pretrained("nielsr/slimsam-50-uniform")
+        return slimsam_model, slimsam_processor
+    else:
+        if sam_model is None:
+            sam_model = SamModel.from_pretrained("facebook/sam-vit-huge").to(device)
+            sam_processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
+        return sam_model, sam_processor
+
+def generate_color_pair():
+    """Generate a random color pair for SAM visualization."""
+    hue = random.random()
+    dark_rgb = [int(255 * x) for x in colorsys.hsv_to_rgb(hue, 0.8, 0.7)]
+    light_rgb = [int(255 * x) for x in colorsys.hsv_to_rgb(hue, 0.6, 0.9)]
+    return dark_rgb, light_rgb
+
+def create_mask_overlay(image, mask):
+    """Create a mask overlay with contours for SAM visualization."""
+    # Convert binary mask to uint8
+    mask_uint8 = (mask > 0).astype(np.uint8)
+    
+    # Dilation to fill gaps
+    kernel = np.ones((5, 5), np.uint8)
+    mask_dilated = cv2.dilate(mask_uint8, kernel, iterations=1)
+    
+    # Find contours of the dilated mask
+    contours, _ = cv2.findContours(mask_dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Generate random color pair for this segmentation
+    dark_color, light_color = generate_color_pair()
+    
+    # Create a transparent overlay for the mask
+    overlay = np.zeros((*mask.shape, 4), dtype=np.uint8)
+    overlay[mask_dilated > 0] = [*light_color, 90]  # Light color with 35% opacity
+    
+    # Create a separate layer for the outline
+    outline = np.zeros((*mask.shape, 4), dtype=np.uint8)
+    cv2.drawContours(outline, contours, -1, (*dark_color, 255), 2)  # Dark color outline
+    
+    # Convert to PIL images
+    mask_overlay = Image.fromarray(overlay, 'RGBA')
+    outline_overlay = Image.fromarray(outline, 'RGBA')
+    
+    # Composite the layers
+    result = image.convert('RGBA')
+    result.paste(mask_overlay, (0, 0), mask_overlay)
+    result.paste(outline_overlay, (0, 0), outline_overlay)
+    
+    return result
+
+def process_sam_detection(image, center_x, center_y, slim=False):
+    """Process a single detection point with SAM."""
+    if not isinstance(image, Image.Image):
+        image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    
+    # Get appropriate model based on slim parameter
+    model, processor = load_sam_model(slim)
+    
+    # Process the image with SAM
+    inputs = processor(
+        image,
+        input_points=[[[center_x, center_y]]],
+        return_tensors="pt"
+    ).to(device)
+
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    mask = processor.post_process_masks(
+        outputs.pred_masks.cpu(),
+        inputs["original_sizes"].cpu(),
+        inputs["reshaped_input_sizes"].cpu()
+    )[0][0][0].numpy()
+    
+    # Create the visualization
+    result = create_mask_overlay(image, mask)
+    return result
 
 def load_moondream():
     """Load Moondream model and tokenizer."""
@@ -356,9 +448,13 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, box_style="censor"):
         frame: The video frame to draw on
         detected_objects: List of (box, keyword) tuples
         detect_keyword: The detection keyword
-        box_style: Visualization style ('censor', 'bounding-box', or 'hitmarker')
+        box_style: Visualization style ('censor', 'bounding-box', 'hitmarker', 'sam', or 'sam-fast')
     """
     height, width = frame.shape[:2]
+
+    # For SAM visualization, convert frame to PIL Image once
+    if box_style in ["sam", "sam-fast"]:
+        frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
     for box, keyword in detected_objects:
         try:
@@ -420,6 +516,31 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, box_style="censor"):
                         1,
                         cv2.LINE_AA,
                     )
+                elif box_style in ["sam", "sam-fast"]:
+                    # Calculate center of the box
+                    center_x = (x1 + x2) // 2
+                    center_y = (y1 + y2) // 2
+
+                    # Process with SAM and get the result
+                    result_pil = process_sam_detection(frame_pil, center_x, center_y, slim=(box_style == "sam-fast"))
+                    
+                    # Convert back to OpenCV format
+                    frame = cv2.cvtColor(np.array(result_pil), cv2.COLOR_RGB2BGR)
+
+                    # Optional: Add small label above the center
+                    label = detect_keyword  # Use exact capitalization
+                    label_size = cv2.getTextSize(label, FONT, 0.5, 1)[0]
+                    cv2.putText(
+                        frame,
+                        label,
+                        (center_x - label_size[0] // 2, center_y - 20),
+                        FONT,
+                        0.5,
+                        (255, 255, 255),
+                        1,
+                        cv2.LINE_AA,
+                    )
+
         except Exception as e:
             print(f"Error drawing {box_style} style box: {str(e)}")
 
@@ -690,7 +811,7 @@ def main():
     )
     parser.add_argument(
         "--box-style",
-        choices=["censor", "bounding-box", "hitmarker"],
+        choices=["censor", "bounding-box", "hitmarker", "sam", "sam-fast"],
         default="censor",
         help="Style of detection visualization (default: censor)",
     )
