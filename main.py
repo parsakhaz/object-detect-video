@@ -441,46 +441,45 @@ def draw_hitmarker(
     )
 
 
-def draw_ad_boxes(frame, detected_objects, detect_keyword, box_style="censor"):
-    """Draw detection visualizations over detected objects.
-
-    Args:
-        frame: The video frame to draw on
-        detected_objects: List of (box, keyword) tuples
-        detect_keyword: The detection keyword
-        box_style: Visualization style ('censor', 'bounding-box', 'hitmarker', 'sam', or 'sam-fast')
-    """
+def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="censor"):
     height, width = frame.shape[:2]
 
-    # For SAM visualization, convert frame to PIL Image once
-    if box_style in ["sam", "sam-fast"]:
+    points = []
+    if box_style in ["hitmarker", "sam", "sam-fast"]:
         frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        print(f"\nCalling model.point with keyword: {detect_keyword}")
+        try:
+            point_response = model.point(frame_pil, detect_keyword)
+            print(f"Points returned from model: {point_response}")
+            print(f"Type of response: {type(point_response)}")
+            
+            if isinstance(point_response, dict) and 'points' in point_response:
+                points = point_response['points']
+                if points:
+                    print(f"First point: {points[0]}")
+        except Exception as e:
+            print(f"Error during point detection: {str(e)}")
+            points = []
 
     for box, keyword in detected_objects:
         try:
-            # Convert normalized coordinates to pixel coordinates
             x1 = int(box[0] * width)
             y1 = int(box[1] * height)
             x2 = int(box[2] * width)
             y2 = int(box[3] * height)
 
-            # Ensure coordinates are within frame boundaries
             x1 = max(0, min(x1, width - 1))
             y1 = max(0, min(y1, height - 1))
             x2 = max(0, min(x2, width - 1))
             y2 = max(0, min(y2, height - 1))
 
-            # Only draw if box has reasonable size
             if x2 > x1 and y2 > y1:
                 if box_style == "censor":
-                    # Draw solid black rectangle
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), -1)
                 elif box_style == "bounding-box":
-                    # Draw red rectangle with thicker line
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
 
-                    # Add label with background
-                    label = detect_keyword  # Use exact capitalization
+                    label = detect_keyword
                     label_size = cv2.getTextSize(label, FONT, 0.7, 2)[0]
                     cv2.rectangle(
                         frame, (x1, y1 - 25), (x1 + label_size[0], y1), (0, 0, 255), -1
@@ -496,53 +495,64 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, box_style="censor"):
                         cv2.LINE_AA,
                     )
                 elif box_style == "hitmarker":
-                    # Calculate center of the box
-                    center_x = (x1 + x2) // 2
-                    center_y = (y1 + y2) // 2
+                    if points:
+                        for point in points:
+                            try:
+                                print(f"Processing point: {point}")
+                                center_x = int(float(point["x"]) * width)
+                                center_y = int(float(point["y"]) * height)
+                                print(f"Converted coordinates: ({center_x}, {center_y})")
 
-                    # Draw hitmarker at the center
-                    draw_hitmarker(frame, center_x, center_y)
+                                draw_hitmarker(frame, center_x, center_y)
 
-                    # Optional: Add small label above hitmarker
-                    label = detect_keyword  # Use exact capitalization
-                    label_size = cv2.getTextSize(label, FONT, 0.5, 1)[0]
-                    cv2.putText(
-                        frame,
-                        label,
-                        (center_x - label_size[0] // 2, center_y - HITMARKER_SIZE - 5),
-                        FONT,
-                        0.5,
-                        HITMARKER_COLOR,
-                        1,
-                        cv2.LINE_AA,
-                    )
+                                label = detect_keyword
+                                label_size = cv2.getTextSize(label, FONT, 0.5, 1)[0]
+                                cv2.putText(
+                                    frame,
+                                    label,
+                                    (center_x - label_size[0] // 2, center_y - HITMARKER_SIZE - 5),
+                                    FONT,
+                                    0.5,
+                                    HITMARKER_COLOR,
+                                    1,
+                                    cv2.LINE_AA,
+                                )
+                            except Exception as e:
+                                print(f"Error processing individual point: {str(e)}")
+                                print(f"Point data: {point}")
                 elif box_style in ["sam", "sam-fast"]:
-                    # Calculate center of the box
-                    center_x = (x1 + x2) // 2
-                    center_y = (y1 + y2) // 2
+                    if points:
+                        for point in points:
+                            try:
+                                print(f"Processing point for SAM: {point}")
+                                center_x = int(float(point["x"]) * width)
+                                center_y = int(float(point["y"]) * height)
+                                print(f"Converted SAM coordinates: ({center_x}, {center_y})")
 
-                    # Process with SAM and get the result
-                    result_pil = process_sam_detection(frame_pil, center_x, center_y, slim=(box_style == "sam-fast"))
-                    
-                    # Convert back to OpenCV format
-                    frame = cv2.cvtColor(np.array(result_pil), cv2.COLOR_RGB2BGR)
+                                result_pil = process_sam_detection(frame_pil, center_x, center_y, slim=(box_style == "sam-fast"))
+                                
+                                frame = cv2.cvtColor(np.array(result_pil), cv2.COLOR_RGB2BGR)
 
-                    # Optional: Add small label above the center
-                    label = detect_keyword  # Use exact capitalization
-                    label_size = cv2.getTextSize(label, FONT, 0.5, 1)[0]
-                    cv2.putText(
-                        frame,
-                        label,
-                        (center_x - label_size[0] // 2, center_y - 20),
-                        FONT,
-                        0.5,
-                        (255, 255, 255),
-                        1,
-                        cv2.LINE_AA,
-                    )
+                                label = detect_keyword
+                                label_size = cv2.getTextSize(label, FONT, 0.5, 1)[0]
+                                cv2.putText(
+                                    frame,
+                                    label,
+                                    (center_x - label_size[0] // 2, center_y - 20),
+                                    FONT,
+                                    0.5,
+                                    (255, 255, 255),
+                                    1,
+                                    cv2.LINE_AA,
+                                )
+                            except Exception as e:
+                                print(f"Error processing individual SAM point: {str(e)}")
+                                print(f"Point data: {point}")
 
         except Exception as e:
             print(f"Error drawing {box_style} style box: {str(e)}")
+            print(f"Box data: {box}")
+            print(f"Keyword: {keyword}")
 
     return frame
 
@@ -627,6 +637,7 @@ def create_detection_video(
     video_path,
     ad_detections,
     detect_keyword,
+    model,
     output_path=None,
     ffmpeg_preset="medium",
     test_mode=False,
@@ -687,7 +698,7 @@ def create_detection_video(
                 current_detections = ad_detections[frame_count_processed]
                 if current_detections:
                     frame = draw_ad_boxes(
-                        frame, current_detections, detect_keyword, box_style=box_style
+                        frame, current_detections, detect_keyword, model, box_style=box_style
                     )
 
             out.write(frame)
@@ -764,6 +775,7 @@ def process_video(
         video_path,
         ad_detections,
         detect_keyword,
+        model,
         ffmpeg_preset=ffmpeg_preset,
         test_mode=test_mode,
         box_style=box_style,
