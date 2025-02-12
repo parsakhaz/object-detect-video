@@ -114,7 +114,7 @@ def create_visualization_plots(json_path):
         # Load the data
         data = load_detection_data(json_path)
         if not data:
-            return None, None, None, None, "No data found"
+            return None, None, None, None, None, None, None, None, "No data found"
 
         # Convert to DataFrame
         rows = []
@@ -130,21 +130,23 @@ def create_visualization_plots(json_path):
                     "y1": obj["bbox"][1],
                     "x2": obj["bbox"][2],
                     "y2": obj["bbox"][3],
-                    "area": (obj["bbox"][2] - obj["bbox"][0]) * (obj["bbox"][3] - obj["bbox"][1])
+                    "area": (obj["bbox"][2] - obj["bbox"][0]) * (obj["bbox"][3] - obj["bbox"][1]),
+                    "center_x": (obj["bbox"][0] + obj["bbox"][2]) / 2,
+                    "center_y": (obj["bbox"][1] + obj["bbox"][3]) / 2
                 })
 
         if not rows:
-            return None, None, None, None, "No detections found in the data"
+            return None, None, None, None, None, None, None, None, "No detections found in the data"
 
         df = pd.DataFrame(rows)
         plots = []
 
         # Create each plot and convert to image
-        for plot_num in range(4):
+        for plot_num in range(8):  # Increased to 8 plots
             plt.figure(figsize=(8, 6))
             
             if plot_num == 0:
-                # Plot 1: Number of detections per frame
+                # Plot 1: Number of detections per frame (Original)
                 detections_per_frame = df.groupby("frame").size()
                 plt.plot(detections_per_frame.index, detections_per_frame.values)
                 plt.xlabel("Frame")
@@ -152,14 +154,14 @@ def create_visualization_plots(json_path):
                 plt.title("Detections Per Frame")
             
             elif plot_num == 1:
-                # Plot 2: Distribution of detection areas
+                # Plot 2: Distribution of detection areas (Original)
                 df["area"].hist(bins=30)
                 plt.xlabel("Detection Area (normalized)")
                 plt.ylabel("Count")
                 plt.title("Distribution of Detection Areas")
             
             elif plot_num == 2:
-                # Plot 3: Average detection area over time
+                # Plot 3: Average detection area over time (Original)
                 avg_area = df.groupby("frame")["area"].mean()
                 plt.plot(avg_area.index, avg_area.values)
                 plt.xlabel("Frame")
@@ -167,14 +169,89 @@ def create_visualization_plots(json_path):
                 plt.title("Average Detection Area Over Time")
             
             elif plot_num == 3:
-                # Plot 4: Heatmap of detection centers
-                df["center_x"] = (df["x1"] + df["x2"]) / 2
-                df["center_y"] = (df["y1"] + df["y2"]) / 2
+                # Plot 4: Heatmap of detection centers (Original)
                 plt.hist2d(df["center_x"], df["center_y"], bins=30)
                 plt.colorbar()
                 plt.xlabel("X Position")
                 plt.ylabel("Y Position")
                 plt.title("Detection Center Heatmap")
+
+            elif plot_num == 4:
+                # Plot 5: NEW - Time-based Detection Density
+                # Shows when in the video most detections occur
+                df["time_bucket"] = pd.qcut(df["timestamp"], q=20, labels=False)
+                time_density = df.groupby("time_bucket").size()
+                plt.bar(time_density.index, time_density.values)
+                plt.xlabel("Video Timeline (20 segments)")
+                plt.ylabel("Number of Detections")
+                plt.title("Detection Density Over Video Duration")
+
+            elif plot_num == 5:
+                # Plot 6: NEW - Screen Region Analysis
+                # Divide screen into 3x3 grid and show detection counts
+                try:
+                    df["grid_x"] = pd.qcut(df["center_x"], q=3, labels=["Left", "Center", "Right"], duplicates='drop')
+                    df["grid_y"] = pd.qcut(df["center_y"], q=3, labels=["Top", "Middle", "Bottom"], duplicates='drop')
+                    region_counts = df.groupby(["grid_y", "grid_x"]).size().unstack(fill_value=0)
+                    plt.imshow(region_counts, cmap="YlOrRd")
+                    plt.colorbar(label="Detection Count")
+                    for i in range(3):
+                        for j in range(3):
+                            plt.text(j, i, region_counts.iloc[i, j], ha="center", va="center")
+                    plt.xticks(range(3), ["Left", "Center", "Right"])
+                    plt.yticks(range(3), ["Top", "Middle", "Bottom"])
+                    plt.title("Screen Region Analysis")
+                except Exception as e:
+                    plt.text(0.5, 0.5, "Insufficient variation in detection positions", 
+                            ha='center', va='center')
+                    plt.title("Screen Region Analysis (Not Available)")
+
+            elif plot_num == 6:
+                # Plot 7: NEW - Detection Size Categories
+                # Categorize detections by size for content moderation
+                try:
+                    size_labels = [
+                        "Small (likely far/background)",
+                        "Medium-small",
+                        "Medium-large",
+                        "Large (likely foreground/close)"
+                    ]
+                    
+                    # Handle cases with limited unique values
+                    unique_areas = df["area"].nunique()
+                    if unique_areas >= 4:
+                        df["size_category"] = pd.qcut(df["area"], q=4, labels=size_labels, duplicates='drop')
+                    else:
+                        # Alternative binning for limited unique values
+                        df["size_category"] = pd.cut(df["area"], 
+                                                   bins=unique_areas, 
+                                                   labels=size_labels[:unique_areas])
+                    
+                    size_dist = df["size_category"].value_counts()
+                    plt.pie(size_dist.values, labels=size_dist.index, autopct="%1.1f%%")
+                    plt.title("Detection Size Distribution")
+                except Exception as e:
+                    plt.text(0.5, 0.5, "Insufficient variation in detection sizes", 
+                            ha='center', va='center')
+                    plt.title("Detection Size Distribution (Not Available)")
+
+            elif plot_num == 7:
+                # Plot 8: NEW - Temporal Pattern Analysis
+                # Show patterns of when detections occur in sequence
+                try:
+                    detection_gaps = df.sort_values("frame")["frame"].diff()
+                    if len(detection_gaps.dropna().unique()) > 1:
+                        plt.hist(detection_gaps.dropna(), bins=min(30, len(detection_gaps.dropna().unique())), 
+                               edgecolor="black")
+                        plt.xlabel("Frames Between Detections")
+                        plt.ylabel("Frequency")
+                        plt.title("Detection Temporal Pattern Analysis")
+                    else:
+                        plt.text(0.5, 0.5, "Uniform detection intervals", ha='center', va='center')
+                        plt.title("Temporal Pattern Analysis (Uniform)")
+                except Exception as e:
+                    plt.text(0.5, 0.5, "Insufficient temporal data", ha='center', va='center')
+                    plt.title("Temporal Pattern Analysis (Not Available)")
 
             # Save plot to bytes
             buf = io.BytesIO()
@@ -183,24 +260,30 @@ def create_visualization_plots(json_path):
             plots.append(Image.open(buf))
             plt.close()
 
-        # Generate summary text
+        # Enhanced summary text
         summary = f"""Summary Statistics:
 Total frames analyzed: {len(data['frame_detections'])}
 Total detections: {len(df)}
 Average detections per frame: {len(df) / len(data['frame_detections']):.2f}
+
+Detection Patterns:
+- Peak detection count: {df.groupby('frame').size().max()} (in a single frame)
+- Most common screen region: {df.groupby(['grid_y', 'grid_x']).size().idxmax()}
+- Average detection size: {df['area'].mean():.3f}
+- Median frames between detections: {detection_gaps.median():.1f}
 
 Video metadata:
 """
         for key, value in data["video_metadata"].items():
             summary += f"{key}: {value}\n"
 
-        return plots[0], plots[1], plots[2], plots[3], summary
+        return plots[0], plots[1], plots[2], plots[3], plots[4], plots[5], plots[6], plots[7], summary
 
     except Exception as e:
         print(f"Error creating visualization: {str(e)}")
         import traceback
         traceback.print_exc()
-        return None, None, None, None, f"Error creating visualization: {str(e)}"
+        return None, None, None, None, None, None, None, None, f"Error creating visualization: {str(e)}"
 
 # Create the Gradio interface
 with gr.Blocks(title="Promptable Video Redaction") as app:
@@ -311,10 +394,11 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
             gr.Markdown(
                 """
             Analyze the detection results from processed videos. The analysis includes:
-            - Number of detections per frame
-            - Distribution of detection areas
-            - Average detection area over time
-            - Spatial distribution of detections
+            - Basic detection statistics and patterns
+            - Temporal and spatial distribution analysis
+            - Size-based categorization
+            - Screen region analysis
+            - Detection density patterns
             """
             )
             
@@ -327,16 +411,45 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
 
             with gr.Row():
                 with gr.Column():
-                    plot1 = gr.Image(label="Detections Per Frame")
-                    plot2 = gr.Image(label="Detection Areas Distribution")
+                    plot1 = gr.Image(
+                        label="Detections Per Frame",
+                        # caption="Track the frequency of detections across frames. Spikes indicate frames with high concentration of detected content, useful for identifying problematic scenes."
+                    )
+                    plot2 = gr.Image(
+                        label="Detection Areas Distribution",
+                        # caption="Shows how much screen space detections typically occupy. Large areas might indicate prominent/obvious content, while small areas could be subtle elements."
+                    )
+                    plot5 = gr.Image(
+                        label="Detection Density Timeline",
+                        # caption="Visualizes when detections occur most frequently throughout the video duration. Helps identify segments that require closer review."
+                    )
+                    plot6 = gr.Image(
+                        label="Screen Region Analysis",
+                        # caption="Maps where detections commonly appear on screen (3x3 grid). Useful for identifying patterns in content placement, like watermarks or overlays."
+                    )
                 
                 with gr.Column():
-                    plot3 = gr.Image(label="Average Detection Area Over Time")
-                    plot4 = gr.Image(label="Detection Centers Heatmap")
+                    plot3 = gr.Image(
+                        label="Average Detection Area Over Time",
+                        # caption="Shows how detection sizes change throughout the video. Sudden changes might indicate transitions or different types of content."
+                    )
+                    plot4 = gr.Image(
+                        label="Detection Center Heatmap",
+                        # caption="Reveals hotspots where detections frequently occur. Helps identify if content is concentrated in specific screen areas."
+                    )
+                    plot7 = gr.Image(
+                        label="Detection Size Categories",
+                        # caption="Categorizes detections by their relative size. Large detections might be prominent/foreground content, while small ones could be background elements."
+                    )
+                    plot8 = gr.Image(
+                        label="Temporal Pattern Analysis",
+                        # caption="Shows the timing between consecutive detections. Regular patterns might indicate systematic content placement or recurring elements."
+                    )
             
             stats_output = gr.Textbox(
                 label="Statistics",
-                lines=10,
+                info="Summary of key metrics and patterns found in the detection data.",
+                lines=12,
                 max_lines=15,
                 interactive=False
             )
@@ -360,14 +473,14 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
     process_outputs.then(
         fn=create_visualization_plots,
         inputs=[json_output],
-        outputs=[plot1, plot2, plot3, plot4, stats_output],
+        outputs=[plot1, plot2, plot3, plot4, plot5, plot6, plot7, plot8, stats_output],
     )
 
     # Manual analysis button
     analyze_btn.click(
         fn=create_visualization_plots,
         inputs=[json_input],
-        outputs=[plot1, plot2, plot3, plot4, stats_output],
+        outputs=[plot1, plot2, plot3, plot4, plot5, plot6, plot7, plot8, stats_output],
     )
 
 if __name__ == "__main__":
