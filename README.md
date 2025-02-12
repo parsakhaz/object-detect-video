@@ -26,6 +26,8 @@ Links:
   - Censor: Black boxes over detected objects
   - Bounding Box: Traditional bounding boxes with labels
   - Hitmarker: Call of Duty style crosshair markers
+  - SAM (Segment Anything Model) segmentation
+  - Fast SAM segmentation
 - Optional grid-based detection for improved accuracy
 - Flexible object type detection using natural language
 - Frame-by-frame processing with IoU-based merging
@@ -33,6 +35,9 @@ Links:
 - Web-compatible output format
 - User-friendly web interface
 - Command-line interface for automation
+- Detection data persistence and visualization
+- Support for test mode (process only first 3 seconds)
+- Configurable FFmpeg encoding presets
 
 ## Requirements
 
@@ -125,6 +130,8 @@ python main.py --detect "person wearing a hat"  # Detect people with hats
 python main.py --box-style censor     # Black boxes (default)
 python main.py --box-style bounding-box       # Bounding box-style boxes with labels
 python main.py --box-style hitmarker  # COD-style hitmarkers
+python main.py --box-style sam  # SAM segmentation
+python main.py --box-style sam-fast  # Fast SAM segmentation
 ```
 
 - `--rows` and `--cols`: Enable grid-based detection by splitting frames
@@ -159,7 +166,31 @@ The tool supports three different visualization styles for detected objects:
    - Small label above the marker
    - Stylistic choice for gaming-inspired visualization
 
+4. **SAM**
+   - Segment Anything Model segmentation
+   - Provides detailed segmentation of detected objects
+   - More resource-intensive but provides detailed segmentation
+
+5. **Fast SAM**
+   - Fast Segment Anything Model segmentation
+   - Faster than SAM but less detailed
+
 Choose the style that best fits your use case using the `--box-style` argument.
+
+### Visualization
+
+To visualize detection data:
+
+```bash
+python visualization.py path/to/detection_data.json
+```
+
+This will display:
+- Number of detections per frame
+- Distribution of detection areas
+- Average detection area over time
+- Heatmap of detection centers
+- Summary statistics
 
 ## Output
 
@@ -176,6 +207,40 @@ The output videos will include:
 - Selected visualization style for detected objects
 - Web-compatible H.264 encoding
 
+## Detection Data Format
+
+The detection data is saved in JSON format with the following structure:
+
+```json
+{
+  "video_metadata": {
+    "file_name": "example.mp4",
+    "fps": 30,
+    "width": 1920,
+    "height": 1080,
+    "total_frames": 900,
+    "duration_sec": 30,
+    "detect_keyword": "face",
+    "test_mode": false,
+    "grid_size": "1x1",
+    "box_style": "censor",
+    "timestamp": "2024-03-14T12:00:00"
+  },
+  "frame_detections": [
+    {
+      "frame": 0,
+      "timestamp": 0.0,
+      "objects": [
+        {
+          "keyword": "face",
+          "bbox": [0.1, 0.1, 0.3, 0.3]
+        }
+      ]
+    }
+  ]
+}
+```
+
 ## Notes
 
 - Processing time depends on video length, grid size, and GPU availability
@@ -186,3 +251,4 @@ The output videos will include:
 - Web interface shows progress updates and errors
 - Choose visualization style based on your use case
 - Moondream can detect almost anything you can describe in natural language
+- Detection data can be used for further analysis using the visualization tool

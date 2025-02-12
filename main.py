@@ -585,9 +585,7 @@ def filter_temporal_outliers(detections_dict):
     return filtered_detections
 
 
-def describe_frames(
-    video_path, model, tokenizer, detect_keyword, test_mode=False, rows=1, cols=1
-):
+def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=False, rows=1, cols=1):
     """Extract and detect objects in frames."""
     props = get_video_properties(video_path)
     fps = props["fps"]
@@ -628,9 +626,7 @@ def describe_frames(
         print("No frames could be read from video")
         return {}
 
-    # Filter out only extremely large detections
-    ad_detections = filter_temporal_outliers(ad_detections)
-    return ad_detections
+    return ad_detections  # Return raw detections without filtering
 
 
 def create_detection_video(
@@ -758,35 +754,90 @@ def process_video(
     box_style="censor",
 ):
     """Process a single video file."""
-    print(f"\nProcessing: {video_path}")
-    print(f"Looking for: {detect_keyword}")
+    try:
+        print(f"\nProcessing: {video_path}")
+        print(f"Looking for: {detect_keyword}")
 
-    # Load model
-    print("Loading Moondream model...")
-    model, tokenizer = load_moondream()
+        # Load model
+        print("Loading Moondream model...")
+        model, tokenizer = load_moondream()
 
-    # Process video - detect objects
-    ad_detections = describe_frames(
-        video_path, model, tokenizer, detect_keyword, test_mode, rows, cols
-    )
+        # Get video properties
+        props = get_video_properties(video_path)
+        
+        # Get raw detections
+        raw_ad_detections = describe_frames(
+            video_path, model, tokenizer, detect_keyword, test_mode, rows, cols
+        )
+        
+        # Apply filtering
+        filtered_ad_detections = filter_temporal_outliers(raw_ad_detections)
+        
+        # Build detection data structure
+        detection_data = {
+            "video_metadata": {
+                "file_name": os.path.basename(video_path),
+                "fps": props["fps"],
+                "width": props["width"],
+                "height": props["height"],
+                "total_frames": props["frame_count"],
+                "duration_sec": props["frame_count"] / props["fps"],
+                "detect_keyword": detect_keyword,
+                "test_mode": test_mode,
+                "grid_size": f"{rows}x{cols}",
+                "box_style": box_style,
+                "timestamp": datetime.now().isoformat()
+            },
+            "frame_detections": [
+                {
+                    "frame": frame_num,
+                    "timestamp": frame_num / props["fps"],
+                    "objects": [
+                        {
+                            "keyword": kw,
+                            "bbox": list(box)  # Convert numpy array to list if needed
+                        }
+                        for box, kw in filtered_ad_detections.get(frame_num, [])
+                    ]
+                }
+                for frame_num in range(props["frame_count"] if not test_mode else min(int(props["fps"] * TEST_MODE_DURATION), props["frame_count"]))
+            ]
+        }
+        
+        # Save filtered data
+        outputs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
+        os.makedirs(outputs_dir, exist_ok=True)
+        base_name = os.path.splitext(os.path.basename(video_path))[0]
+        json_path = os.path.join(outputs_dir, f"{box_style}_{detect_keyword}_{base_name}_detections.json")
+        
+        from persistence import save_detection_data
+        if not save_detection_data(detection_data, json_path):
+            print("Warning: Failed to save detection data")
 
-    # Create video with detection boxes
-    output_path = create_detection_video(
-        video_path,
-        ad_detections,
-        detect_keyword,
-        model,
-        ffmpeg_preset=ffmpeg_preset,
-        test_mode=test_mode,
-        box_style=box_style,
-    )
+        # Create video with filtered data
+        output_path = create_detection_video(
+            video_path,
+            filtered_ad_detections,
+            detect_keyword,
+            model,
+            ffmpeg_preset=ffmpeg_preset,
+            test_mode=test_mode,
+            box_style=box_style,
+        )
 
-    if output_path is None:
-        print("\nError: Failed to create output video")
+        if output_path is None:
+            print("\nError: Failed to create output video")
+            return None
+
+        print(f"\nOutput saved to: {output_path}")
+        print(f"Detection data saved to: {json_path}")
+        return output_path
+        
+    except Exception as e:
+        print(f"Error processing video: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
-
-    print(f"\nOutput saved to: {output_path}")
-    return output_path
 
 
 def main():
