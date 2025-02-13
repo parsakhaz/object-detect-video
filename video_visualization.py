@@ -41,6 +41,10 @@ def generate_frame_image(df, frame_num, temp_dir, max_y):
     # Set the style to dark background
     plt.style.use('dark_background')
     
+    # Set global font to monospace
+    plt.rcParams['font.family'] = 'monospace'
+    plt.rcParams['font.monospace'] = ['DejaVu Sans Mono']
+    
     plt.figure(figsize=(10, 6))
     
     # Plot data up to current frame
@@ -56,15 +60,15 @@ def generate_frame_image(df, frame_num, temp_dir, max_y):
     plt.ylim(0, max_y * 1.1)  # Add 10% padding
     
     # Add labels with Matrix green color
-    plt.title(f'Frame {frame_num} - Detections Over Time', color='#00ff41')
-    plt.xlabel('Frame Number', color='#00ff41')
-    plt.ylabel('Number of Detections', color='#00ff41')
+    plt.title(f'FRAME {frame_num:04d} - DETECTIONS OVER TIME', color='#00ff41', pad=20)
+    plt.xlabel('FRAME NUMBER', color='#00ff41')
+    plt.ylabel('NUMBER OF DETECTIONS', color='#00ff41')
     
-    # Add current stats in Matrix green
+    # Add current stats in Matrix green with monospace formatting
     current_detections = df[df['frame'] == frame_num]['detections'].iloc[0]
-    plt.text(0.02, 0.98, f'Current detections: {current_detections}', 
+    plt.text(0.02, 0.98, f'CURRENT DETECTIONS: {current_detections:02d}', 
              transform=plt.gca().transAxes, verticalalignment='top',
-             color='#00ff41')
+             color='#00ff41', family='monospace')
     
     # Style the grid and ticks
     plt.grid(True, color='#1a1a1a', linestyle='-', alpha=0.3)
