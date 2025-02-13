@@ -146,9 +146,9 @@ def get_video_properties(video_path):
     return {"fps": fps, "frame_count": frame_count, "width": width, "height": height}
 
 
-def is_valid_box(box):
-    """Check if box coordinates are reasonable."""
-    x1, y1, x2, y2 = box
+def is_valid_bounding_box(bounding_box):
+    """Check if bounding box coordinates are reasonable."""
+    x1, y1, x2, y2 = bounding_box
     width = x2 - x1
     height = y2 - y1
 
@@ -163,20 +163,20 @@ def is_valid_box(box):
     return True
 
 
-def split_frame_into_tiles(frame, rows, cols):
+def split_frame_into_grid(frame, grid_rows, grid_cols):
     """Split a frame into a grid of tiles."""
     height, width = frame.shape[:2]
-    tile_height = height // rows
-    tile_width = width // cols
+    tile_height = height // grid_rows
+    tile_width = width // grid_cols
     tiles = []
     tile_positions = []
 
-    for i in range(rows):
-        for j in range(cols):
+    for i in range(grid_rows):
+        for j in range(grid_cols):
             y1 = i * tile_height
-            y2 = (i + 1) * tile_height if i < rows - 1 else height
+            y2 = (i + 1) * tile_height if i < grid_rows - 1 else height
             x1 = j * tile_width
-            x2 = (j + 1) * tile_width if j < cols - 1 else width
+            x2 = (j + 1) * tile_width if j < grid_cols - 1 else width
 
             tile = frame[y1:y2, x1:x2]
             tiles.append(tile)
@@ -272,17 +272,17 @@ def merge_tile_detections(tile_detections, iou_threshold=0.5):
     return [(all_boxes[i], all_keywords[i]) for i in keep]
 
 
-def detect_ads_in_frame(model, tokenizer, image, detect_keyword, rows=1, cols=1):
-    """Detect objects in a frame using grid-based detection."""
-    if rows == 1 and cols == 1:
-        return detect_ads_in_frame_single(model, tokenizer, image, detect_keyword)
+def detect_objects_in_frame(model, tokenizer, image, target_object, grid_rows=1, grid_cols=1):
+    """Detect specified objects in a frame using grid-based analysis."""
+    if grid_rows == 1 and grid_cols == 1:
+        return detect_objects_in_frame_single(model, tokenizer, image, target_object)
 
     # Convert numpy array to PIL Image if needed
     if not isinstance(image, Image.Image):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
     # Split frame into tiles
-    tiles, tile_positions = split_frame_into_tiles(image, rows, cols)
+    tiles, tile_positions = split_frame_into_grid(image, grid_rows, grid_cols)
 
     # Process each tile
     tile_detections = []
@@ -291,7 +291,7 @@ def detect_ads_in_frame(model, tokenizer, image, detect_keyword, rows=1, cols=1)
         tile_pil = Image.fromarray(tile)
 
         # Detect objects in tile
-        response = model.detect(tile_pil, detect_keyword)
+        response = model.detect(tile_pil, target_object)
 
         if response and "objects" in response and response["objects"]:
             objects = response["objects"]
@@ -301,12 +301,12 @@ def detect_ads_in_frame(model, tokenizer, image, detect_keyword, rows=1, cols=1)
                 if all(k in obj for k in ["x_min", "y_min", "x_max", "y_max"]):
                     box = [obj["x_min"], obj["y_min"], obj["x_max"], obj["y_max"]]
 
-                    if is_valid_box(box):
+                    if is_valid_bounding_box(box):
                         # Convert tile coordinates to frame coordinates
                         frame_box = convert_tile_coords_to_frame(
                             box, tile_pos, image.shape
                         )
-                        tile_objects.append((frame_box, detect_keyword))
+                        tile_objects.append((frame_box, target_object))
 
             if tile_objects:  # Only append if we found valid objects
                 tile_detections.append(tile_objects)
@@ -316,7 +316,7 @@ def detect_ads_in_frame(model, tokenizer, image, detect_keyword, rows=1, cols=1)
     return merged_detections
 
 
-def detect_ads_in_frame_single(model, tokenizer, image, detect_keyword):
+def detect_objects_in_frame_single(model, tokenizer, image, target_object):
     """Single-frame detection function."""
     detected_objects = []
 
@@ -325,7 +325,7 @@ def detect_ads_in_frame_single(model, tokenizer, image, detect_keyword):
         image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
     # Detect objects
-    response = model.detect(image, detect_keyword)
+    response = model.detect(image, target_object)
 
     # Check if we have valid objects
     if response and "objects" in response and response["objects"]:
@@ -335,8 +335,8 @@ def detect_ads_in_frame_single(model, tokenizer, image, detect_keyword):
             if all(k in obj for k in ["x_min", "y_min", "x_max", "y_max"]):
                 box = [obj["x_min"], obj["y_min"], obj["x_max"], obj["y_max"]]
                 # If box is valid (not full-frame), add it
-                if is_valid_box(box):
-                    detected_objects.append((box, detect_keyword))
+                if is_valid_bounding_box(box):
+                    detected_objects.append((box, target_object))
 
     return detected_objects
 
@@ -585,7 +585,7 @@ def filter_temporal_outliers(detections_dict):
     return filtered_detections
 
 
-def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=False, rows=1, cols=1):
+def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=False, grid_rows=1, grid_cols=1):
     """Extract and detect objects in frames."""
     props = get_video_properties(video_path)
     fps = props["fps"]
@@ -610,8 +610,8 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
                 break
 
             # Detect objects in the frame
-            detected_objects = detect_ads_in_frame(
-                model, tokenizer, frame, detect_keyword, rows=rows, cols=cols
+            detected_objects = detect_objects_in_frame(
+                model, tokenizer, frame, detect_keyword, grid_rows=grid_rows, grid_cols=grid_cols
             )
 
             # Store results for every frame, even if empty
@@ -746,17 +746,17 @@ def create_detection_video(
 
 def process_video(
     video_path,
-    detect_keyword,
+    target_object,
     test_mode=False,
     ffmpeg_preset="medium",
-    rows=1,
-    cols=1,
+    grid_rows=1,
+    grid_cols=1,
     box_style="censor",
 ):
-    """Process a single video file."""
+    """Process a video to detect and visualize specified objects."""
     try:
         print(f"\nProcessing: {video_path}")
-        print(f"Looking for: {detect_keyword}")
+        print(f"Looking for: {target_object}")
 
         # Load model
         print("Loading Moondream model...")
@@ -767,7 +767,7 @@ def process_video(
         
         # Get raw detections
         raw_ad_detections = describe_frames(
-            video_path, model, tokenizer, detect_keyword, test_mode, rows, cols
+            video_path, model, tokenizer, target_object, test_mode, grid_rows, grid_cols
         )
         
         # Apply filtering
@@ -782,9 +782,9 @@ def process_video(
                 "height": props["height"],
                 "total_frames": props["frame_count"],
                 "duration_sec": props["frame_count"] / props["fps"],
-                "detect_keyword": detect_keyword,
+                "detect_keyword": target_object,
                 "test_mode": test_mode,
-                "grid_size": f"{rows}x{cols}",
+                "grid_size": f"{grid_rows}x{grid_cols}",
                 "box_style": box_style,
                 "timestamp": datetime.now().isoformat()
             },
@@ -808,7 +808,7 @@ def process_video(
         outputs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
         os.makedirs(outputs_dir, exist_ok=True)
         base_name = os.path.splitext(os.path.basename(video_path))[0]
-        json_path = os.path.join(outputs_dir, f"{box_style}_{detect_keyword}_{base_name}_detections.json")
+        json_path = os.path.join(outputs_dir, f"{box_style}_{target_object}_{base_name}_detections.json")
         
         from persistence import save_detection_data
         if not save_detection_data(detection_data, json_path):
@@ -818,7 +818,7 @@ def process_video(
         output_path = create_detection_video(
             video_path,
             filtered_ad_detections,
-            detect_keyword,
+            target_object,
             model,
             ffmpeg_preset=ffmpeg_preset,
             test_mode=test_mode,
@@ -910,8 +910,8 @@ def main():
             args.detect,
             test_mode=args.test,
             ffmpeg_preset=args.preset,
-            rows=args.rows,
-            cols=args.cols,
+            grid_rows=args.rows,
+            grid_cols=args.cols,
             box_style=args.box_style,
         )
         if output_path:

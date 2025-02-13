@@ -34,7 +34,7 @@ sam_model, sam_processor = load_sam_model()
 # Uncomment for Hugging Face Spaces
 # @spaces.GPU(duration=120)
 def process_video_file(
-    video_file, detect_keyword, box_style, ffmpeg_preset, rows, cols, test_mode
+    video_file, target_object, box_style, ffmpeg_preset, grid_rows, grid_cols, test_mode
 ):
     """Process a video file through the Gradio interface."""
     try:
@@ -56,24 +56,24 @@ def process_video_file(
             # Process the video
             output_path = process_video(
                 input_video_path,
-                detect_keyword,
+                target_object,
                 test_mode=test_mode,
                 ffmpeg_preset=ffmpeg_preset,
-                rows=rows,
-                cols=cols,
+                grid_rows=grid_rows,
+                grid_cols=grid_cols,
                 box_style=box_style,
             )
 
             # Get the corresponding JSON path
             base_name = os.path.splitext(os.path.basename(video_filename))[0]
-            json_path = os.path.join(outputs_dir, f"{box_style}_{detect_keyword}_{base_name}_detections.json")
+            json_path = os.path.join(outputs_dir, f"{box_style}_{target_object}_{base_name}_detections.json")
 
             # Verify output exists and is readable
             if not output_path or not os.path.exists(output_path):
                 print(f"Warning: Output path {output_path} does not exist")
                 # Try to find the output based on expected naming convention
                 expected_output = os.path.join(
-                    outputs_dir, f"{box_style}_{detect_keyword}_{video_filename}"
+                    outputs_dir, f"{box_style}_{target_object}_{video_filename}"
                 )
                 if os.path.exists(expected_output):
                     output_path = expected_output
@@ -82,7 +82,7 @@ def process_video_file(
                     matching_files = [
                         f
                         for f in os.listdir(outputs_dir)
-                        if f.startswith(f"{box_style}_{detect_keyword}_")
+                        if f.startswith(f"{box_style}_{target_object}_")
                     ]
                     if matching_files:
                         output_path = os.path.join(outputs_dir, matching_files[0])
