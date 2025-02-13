@@ -12,6 +12,7 @@ import io
 import base64
 from PIL import Image
 import pandas as pd
+from video_visualization import create_video_visualization
 
 # import spaces
 
@@ -454,6 +455,36 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
                 interactive=False
             )
 
+        with gr.Tab("Video Visualizations"):
+            gr.Markdown("# Real-time Detection Visualization")
+            gr.Markdown(
+                """
+            Watch the detection patterns unfold in real-time as the video plays. The visualization shows:
+            - Number of detections per frame
+            - Current frame position
+            - Basic video statistics
+            """
+            )
+            
+            with gr.Row():
+                json_input_realtime = gr.File(
+                    label="Upload Detection Data (JSON)",
+                    file_types=[".json"],
+                )
+                visualize_btn = gr.Button("Visualize", variant="primary")
+
+            with gr.Row():
+                video_visualization = gr.Video(
+                    label="Detection Visualization",
+                    interactive=False
+                )
+                stats_realtime = gr.Textbox(
+                    label="Video Statistics",
+                    lines=6,
+                    max_lines=8,
+                    interactive=False
+                )
+
     # Event handlers
     process_outputs = process_btn.click(
         fn=process_video_file,
@@ -481,6 +512,20 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
         fn=create_visualization_plots,
         inputs=[json_input],
         outputs=[plot1, plot2, plot3, plot4, plot5, plot6, plot7, plot8, stats_output],
+    )
+
+    # Video visualization button
+    visualize_btn.click(
+        fn=create_video_visualization,
+        inputs=[json_input_realtime],
+        outputs=[video_visualization, stats_realtime],
+    )
+
+    # Auto-visualize after processing
+    process_outputs.then(
+        fn=create_video_visualization,
+        inputs=[json_output],
+        outputs=[video_visualization, stats_realtime],
     )
 
 if __name__ == "__main__":
