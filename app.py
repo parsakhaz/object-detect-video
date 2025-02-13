@@ -356,7 +356,7 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
                         test_mode_input = gr.Checkbox(
                             label="Test Mode (Process first 3 seconds only)",
                             value=True,
-                            info="Enable to quickly test settings on a short clip before processing the full video (recommended)",
+                            info="Enable to quickly test settings on a short clip before processing the full video (recommended). If using the data visualizations, disable.",
                         )
 
                         gr.Markdown(
