@@ -38,33 +38,41 @@ def create_frame_data(json_path):
 
 def generate_frame_image(df, frame_num, temp_dir, max_y):
     """Generate and save a single frame of the visualization."""
+    # Set the style to dark background
+    plt.style.use('dark_background')
+    
     plt.figure(figsize=(10, 6))
     
     # Plot data up to current frame
     current_data = df[df['frame'] <= frame_num]
-    plt.plot(df['frame'], df['detections'], color='lightgray', alpha=0.5)  # Full data in background
-    plt.plot(current_data['frame'], current_data['detections'], color='blue')
+    plt.plot(df['frame'], df['detections'], color='#1a1a1a', alpha=0.5)  # Darker background line
+    plt.plot(current_data['frame'], current_data['detections'], color='#00ff41')  # Matrix green
     
     # Add vertical line for current position
-    plt.axvline(x=frame_num, color='red', linestyle='-', alpha=0.7)
+    plt.axvline(x=frame_num, color='#ff0000', linestyle='-', alpha=0.7)  # Keep red for position
     
     # Set consistent axes
     plt.xlim(0, len(df) - 1)
     plt.ylim(0, max_y * 1.1)  # Add 10% padding
     
-    # Add labels
-    plt.title(f'Frame {frame_num} - Detections Over Time')
-    plt.xlabel('Frame Number')
-    plt.ylabel('Number of Detections')
+    # Add labels with Matrix green color
+    plt.title(f'Frame {frame_num} - Detections Over Time', color='#00ff41')
+    plt.xlabel('Frame Number', color='#00ff41')
+    plt.ylabel('Number of Detections', color='#00ff41')
     
-    # Add current stats
+    # Add current stats in Matrix green
     current_detections = df[df['frame'] == frame_num]['detections'].iloc[0]
     plt.text(0.02, 0.98, f'Current detections: {current_detections}', 
-             transform=plt.gca().transAxes, verticalalignment='top')
+             transform=plt.gca().transAxes, verticalalignment='top',
+             color='#00ff41')
+    
+    # Style the grid and ticks
+    plt.grid(True, color='#1a1a1a', linestyle='-', alpha=0.3)
+    plt.tick_params(colors='#00ff41')
     
     # Save frame
     frame_path = os.path.join(temp_dir, f'frame_{frame_num:05d}.png')
-    plt.savefig(frame_path, bbox_inches='tight', dpi=100)
+    plt.savefig(frame_path, bbox_inches='tight', dpi=100, facecolor='black', edgecolor='none')
     plt.close()
     
     return frame_path
