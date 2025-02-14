@@ -104,7 +104,7 @@ def generate_frame_image(df, frame_num, temp_dir, max_y):
     return frame_path
 
 def generate_gauge_frame(df, frame_num, temp_dir):
-    """Generate a simple binary gauge visualization frame."""
+    """Generate a modern square-style binary gauge visualization frame."""
     # Set the style to dark background
     plt.style.use('dark_background')
     
@@ -112,53 +112,90 @@ def generate_gauge_frame(df, frame_num, temp_dir):
     plt.rcParams['font.family'] = 'monospace'
     plt.rcParams['font.monospace'] = ['DejaVu Sans Mono']
     
-    plt.figure(figsize=(8, 4))
+    # Create figure with 16:9 aspect ratio
+    plt.figure(figsize=(16, 9))
     
     # Get current detection state
     current_detections = df[df['frame'] == frame_num]['detections'].iloc[0]
     has_detection = current_detections > 0
     
     # Create a simple gauge visualization
-    plt.axis('off')  # Hide axes
+    plt.axis('off')
     
-    # Draw the gauge background (semicircle)
-    circle = plt.Circle((0.5, 0), 0.8, fc='#1a1a1a', ec='#333333')
-    plt.gca().add_patch(circle)
-    plt.xlim(0, 1)
-    plt.ylim(-0.1, 0.9)
-    
-    # Add the needle
+    # Set colors
     if has_detection:
         color = '#00ff41'  # Matrix green for YES
-        angle = 45  # Point to YES
         status = 'YES'
+        indicator_pos = 0.8  # Right position
     else:
         color = '#ff0000'  # Red for NO
-        angle = -45  # Point to NO
         status = 'NO'
+        indicator_pos = 0.2  # Left position
     
-    # Draw needle
-    needle_length = 0.6
-    x = 0.5 + needle_length * np.cos(np.radians(angle - 90))
-    y = 0 + needle_length * np.sin(np.radians(angle - 90))
-    plt.plot([0.5, x], [0, y], color=color, linewidth=3)
+    # Draw background rectangle
+    background = plt.Rectangle((0.1, 0.3), 0.8, 0.2, 
+                             facecolor='#1a1a1a', 
+                             edgecolor='#333333',
+                             linewidth=2)
+    plt.gca().add_patch(background)
     
-    # Add center dot
-    plt.plot(0.5, 0, 'o', color=color, markersize=10)
+    # Draw indicator
+    indicator_width = 0.05
+    indicator = plt.Rectangle((indicator_pos - indicator_width/2, 0.25), 
+                            indicator_width, 0.3,
+                            facecolor=color,
+                            edgecolor=None)
+    plt.gca().add_patch(indicator)
+    
+    # Add tick marks
+    tick_positions = [0.2, 0.5, 0.8]  # NO, CENTER, YES
+    for x in tick_positions:
+        plt.plot([x, x], [0.3, 0.5], color='#444444', linewidth=2)
     
     # Add YES/NO labels
-    plt.text(0.85, 0.2, 'YES', color='#00ff41', fontsize=12, ha='center', va='center', family='monospace')
-    plt.text(0.15, 0.2, 'NO', color='#ff0000', fontsize=12, ha='center', va='center', family='monospace')
+    plt.text(0.8, 0.2, 'YES', color='#00ff41', fontsize=14,
+             ha='center', va='center', family='monospace')
+    plt.text(0.2, 0.2, 'NO', color='#ff0000', fontsize=14,
+             ha='center', va='center', family='monospace')
     
-    # Add current status and frame number
-    plt.text(0.5, 0.7, f'DETECTION STATUS: {status}', color=color, 
+    # Add status box at top
+    plt.text(0.5, 0.8, f'DETECTION STATUS: {status}', color=color,
+             fontsize=16, ha='center', va='center', family='monospace',
+             bbox=dict(facecolor='#1a1a1a', 
+                      edgecolor=color,
+                      linewidth=2,
+                      pad=10))
+    
+    # Add frame counter at bottom
+    plt.text(0.5, 0.1, f'FRAME: {frame_num:04d}', color='#00ff41',
              fontsize=14, ha='center', va='center', family='monospace')
-    plt.text(0.5, 0.6, f'FRAME: {frame_num:04d}', color='#00ff41', 
-             fontsize=12, ha='center', va='center', family='monospace')
     
-    # Save frame
+    # Add subtle grid lines for depth
+    for x in np.linspace(0.2, 0.8, 7):
+        plt.plot([x, x], [0.3, 0.5], color='#222222', linewidth=1, zorder=0)
+    
+    # Add glow effect to indicator
+    for i in range(3):
+        glow = plt.Rectangle((indicator_pos - (indicator_width + i*0.01)/2, 
+                            0.25 - i*0.01),
+                            indicator_width + i*0.01, 
+                            0.3 + i*0.02,
+                            facecolor=color,
+                            alpha=0.1/(i+1))
+        plt.gca().add_patch(glow)
+    
+    # Set consistent plot limits
+    plt.xlim(0, 1)
+    plt.ylim(0, 1)
+    
+    # Save frame with 16:9 aspect ratio
     frame_path = os.path.join(temp_dir, f'gauge_{frame_num:05d}.png')
-    plt.savefig(frame_path, bbox_inches='tight', dpi=100, facecolor='black', edgecolor='none')
+    plt.savefig(frame_path, 
+                bbox_inches='tight', 
+                dpi=100, 
+                facecolor='black', 
+                edgecolor='none',
+                pad_inches=0)  # Remove padding
     plt.close()
     
     return frame_path
