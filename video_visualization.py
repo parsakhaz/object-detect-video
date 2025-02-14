@@ -103,7 +103,7 @@ def generate_frame_image(df, frame_num, temp_dir, max_y):
     
     return frame_path
 
-def generate_gauge_frame(df, frame_num, temp_dir):
+def generate_gauge_frame(df, frame_num, temp_dir, detect_keyword="OBJECT"):
     """Generate a modern square-style binary gauge visualization frame."""
     # Set the style to dark background
     plt.style.use('dark_background')
@@ -158,8 +158,8 @@ def generate_gauge_frame(df, frame_num, temp_dir):
     plt.text(0.2, 0.2, 'NO', color='#ff0000', fontsize=14,
              ha='center', va='center', family='monospace')
     
-    # Add status box at top
-    plt.text(0.5, 0.8, f'DETECTION STATUS: {status}', color=color,
+    # Add status box at top with detection keyword
+    plt.text(0.5, 0.8, f'{detect_keyword.upper()} DETECTED?', color=color,
              fontsize=16, ha='center', va='center', family='monospace',
              bbox=dict(facecolor='#1a1a1a', 
                       edgecolor=color,
@@ -195,7 +195,7 @@ def generate_gauge_frame(df, frame_num, temp_dir):
                 dpi=100, 
                 facecolor='black', 
                 edgecolor='none',
-                pad_inches=0)  # Remove padding
+                pad_inches=0)
     plt.close()
     
     return frame_path
@@ -219,6 +219,7 @@ def create_video_visualization(json_path, style="timeline"):
             return None, "No frame data found in JSON file"
         
         total_frames = metadata["total_frames"]
+        detect_keyword = metadata.get("detect_keyword", "OBJECT")  # Get the detection keyword
         
         # Create temporary directory for frames
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -231,7 +232,7 @@ def create_video_visualization(json_path, style="timeline"):
                 for frame in range(total_frames):
                     try:
                         if style == "gauge":
-                            frame_path = generate_gauge_frame(frame_data, frame, temp_dir)
+                            frame_path = generate_gauge_frame(frame_data, frame, temp_dir, detect_keyword)
                         else:  # default to timeline
                             frame_path = generate_frame_image(frame_data, frame, temp_dir, max_y)
                         if frame_path and os.path.exists(frame_path):
