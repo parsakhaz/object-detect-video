@@ -8,6 +8,7 @@ import numpy as np
 from datetime import datetime
 import colorsys
 import random
+from deep_sort_integration import DeepSORTTracker
 
 # Constants
 TEST_MODE_DURATION = 3  # Process only first 3 seconds in test mode
@@ -461,8 +462,15 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
             print(f"Error during point detection: {str(e)}")
             points = []
 
-    for box, keyword in detected_objects:
+    for detection in detected_objects:
         try:
+            # Handle both tracked and untracked detections
+            if len(detection) == 3:  # Tracked detection with ID
+                box, keyword, track_id = detection
+            else:  # Regular detection without tracking
+                box, keyword = detection
+                track_id = None
+
             x1 = int(box[0] * width)
             y1 = int(box[1] * height)
             x2 = int(box[2] * width)
@@ -479,7 +487,8 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
                 elif box_style == "bounding-box":
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
 
-                    label = detect_keyword
+                    # Add tracking ID to label if available
+                    label = f"{detect_keyword} {track_id}" if track_id is not None else detect_keyword
                     label_size = cv2.getTextSize(label, FONT, 0.7, 2)[0]
                     cv2.rectangle(
                         frame, (x1, y1 - 25), (x1 + label_size[0], y1), (0, 0, 255), -1
@@ -505,7 +514,8 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
 
                                 draw_hitmarker(frame, center_x, center_y)
 
-                                label = detect_keyword
+                                # Add tracking ID to label if available
+                                label = f"{detect_keyword} {track_id}" if track_id is not None else detect_keyword
                                 label_size = cv2.getTextSize(label, FONT, 0.5, 1)[0]
                                 cv2.putText(
                                     frame,
@@ -533,7 +543,8 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
                                 
                                 frame = cv2.cvtColor(np.array(result_pil), cv2.COLOR_RGB2BGR)
 
-                                label = detect_keyword
+                                # Add tracking ID to label if available
+                                label = f"{detect_keyword} {track_id}" if track_id is not None else detect_keyword
                                 label_size = cv2.getTextSize(label, FONT, 0.5, 1)[0]
                                 cv2.putText(
                                     frame,
@@ -562,14 +573,21 @@ def filter_temporal_outliers(detections_dict):
     Only keeps detections that are reasonable in size.
 
     Args:
-        detections_dict: Dictionary of {frame_number: [(box, keyword), ...]}
+        detections_dict: Dictionary of {frame_number: [(box, keyword, track_id), ...]}
     """
     filtered_detections = {}
 
     for t, detections in detections_dict.items():
         # Only keep detections that aren't too large
         valid_detections = []
-        for box, keyword in detections:
+        for detection in detections:
+            # Handle both tracked and untracked detections
+            if len(detection) == 3:  # Tracked detection with ID
+                box, keyword, track_id = detection
+            else:  # Regular detection without tracking
+                box, keyword = detection
+                track_id = None
+
             # Calculate box size as percentage of frame
             width = box[2] - box[0]
             height = box[3] - box[1]
@@ -577,7 +595,10 @@ def filter_temporal_outliers(detections_dict):
 
             # If box is less than 90% of frame, keep it
             if area < 0.9:
-                valid_detections.append((box, keyword))
+                if track_id is not None:
+                    valid_detections.append((box, keyword, track_id))
+                else:
+                    valid_detections.append((box, keyword))
 
         if valid_detections:
             filtered_detections[t] = valid_detections
@@ -589,6 +610,9 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
     """Extract and detect objects in frames."""
     props = get_video_properties(video_path)
     fps = props["fps"]
+
+    # Initialize DeepSORT tracker
+    tracker = DeepSORTTracker()
 
     # If in test mode, only process first 3 seconds
     if test_mode:
@@ -614,8 +638,11 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
                 model, tokenizer, frame, detect_keyword, grid_rows=grid_rows, grid_cols=grid_cols
             )
 
+            # Update tracker with current detections
+            tracked_objects = tracker.update(frame, detected_objects)
+
             # Store results for every frame, even if empty
-            ad_detections[frame_count_processed] = detected_objects
+            ad_detections[frame_count_processed] = tracked_objects
 
             frame_count_processed += 1
             pbar.update(1)
@@ -626,7 +653,7 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
         print("No frames could be read from video")
         return {}
 
-    return ad_detections  # Return raw detections without filtering
+    return ad_detections
 
 
 def create_detection_video(
@@ -795,9 +822,11 @@ def process_video(
                     "objects": [
                         {
                             "keyword": kw,
-                            "bbox": list(box)  # Convert numpy array to list if needed
+                            "bbox": list(box),  # Convert numpy array to list if needed
+                            "track_id": track_id if len(detection) == 3 else None
                         }
-                        for box, kw in filtered_ad_detections.get(frame_num, [])
+                        for detection in filtered_ad_detections.get(frame_num, [])
+                        for box, kw, *track_id in [detection]  # Unpack detection tuple, track_id will be empty list if not present
                     ]
                 }
                 for frame_num in range(props["frame_count"] if not test_mode else min(int(props["fps"] * TEST_MODE_DURATION), props["frame_count"]))
