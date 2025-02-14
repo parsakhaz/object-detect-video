@@ -59,10 +59,9 @@ def load_sam_model(slim=False):
         return sam_model, sam_processor
 
 def generate_color_pair():
-    """Generate a random color pair for SAM visualization."""
-    hue = random.random()
-    dark_rgb = [int(255 * x) for x in colorsys.hsv_to_rgb(hue, 0.8, 0.7)]
-    light_rgb = [int(255 * x) for x in colorsys.hsv_to_rgb(hue, 0.6, 0.9)]
+    """Generate a generic light blue and dark blue color pair for SAM visualization."""
+    dark_rgb = [0, 0, 139]  # Dark blue
+    light_rgb = [173, 216, 230]  # Light blue
     return dark_rgb, light_rgb
 
 def create_mask_overlay(image, mask):
@@ -666,7 +665,7 @@ def create_detection_video(
     test_mode=False,
     box_style="censor",
 ):
-    """Create video with detection boxes."""
+    """Create video with detection boxes while preserving audio."""
     if output_path is None:
         # Create outputs directory if it doesn't exist
         outputs_dir = os.path.join(
@@ -702,6 +701,7 @@ def create_detection_video(
     # Create temp output path by adding _temp before the extension
     base, ext = os.path.splitext(output_path)
     temp_output = f"{base}_temp{ext}"
+    temp_audio = f"{base}_audio.aac"  # Temporary audio file
 
     out = cv2.VideoWriter(
         temp_output, cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height)
@@ -731,7 +731,28 @@ def create_detection_video(
     video.release()
     out.release()
 
-    # Convert to web-compatible format more efficiently
+    # Extract audio from original video
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                video_path,
+                "-vn",  # No video
+                "-acodec",
+                "copy",
+                temp_audio,
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Error extracting audio: {str(e)}")
+        if os.path.exists(temp_output):
+            os.remove(temp_output)
+        return None
+
+    # Merge processed video with original audio
     try:
         subprocess.run(
             [
@@ -739,12 +760,18 @@ def create_detection_video(
                 "-y",
                 "-i",
                 temp_output,
+                "-i",
+                temp_audio,
                 "-c:v",
                 "libx264",
                 "-preset",
                 ffmpeg_preset,
                 "-crf",
                 "23",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
                 "-movflags",
                 "+faststart",  # Better web playback
                 "-loglevel",
@@ -754,7 +781,9 @@ def create_detection_video(
             check=True,
         )
 
-        os.remove(temp_output)  # Remove the temporary file
+        # Clean up temporary files
+        os.remove(temp_output)
+        os.remove(temp_audio)
 
         if not os.path.exists(output_path):
             print(
@@ -765,9 +794,11 @@ def create_detection_video(
         return output_path
 
     except subprocess.CalledProcessError as e:
-        print(f"Error running FFmpeg: {str(e)}")
+        print(f"Error merging audio with video: {str(e)}")
         if os.path.exists(temp_output):
             os.remove(temp_output)
+        if os.path.exists(temp_audio):
+            os.remove(temp_audio)
         return None
 
 
