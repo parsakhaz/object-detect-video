@@ -352,7 +352,7 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
                             cols_input = gr.Slider(
                                 minimum=1, maximum=4, value=1, step=1, label="Grid Columns"
                             )
-
+  
                         test_mode_input = gr.Checkbox(
                             label="Test Mode (Process first 3 seconds only)",
                             value=True,
@@ -459,10 +459,9 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
             gr.Markdown("# Real-time Detection Visualization")
             gr.Markdown(
                 """
-            Watch the detection patterns unfold in real-time as the video plays. The visualization shows:
-            - Number of detections per frame
-            - Current frame position
-            - Basic video statistics
+            Watch the detection patterns unfold in real-time. Choose from:
+            - Timeline: Shows number of detections over time
+            - Gauge: Simple yes/no indicator for current frame detections
             """
             )
             
@@ -470,6 +469,12 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
                 json_input_realtime = gr.File(
                     label="Upload Detection Data (JSON)",
                     file_types=[".json"],
+                )
+                viz_style = gr.Radio(
+                    choices=["timeline", "gauge"],
+                    value="timeline",
+                    label="Visualization Style",
+                    info="Choose between timeline view or simple gauge indicator"
                 )
                 visualize_btn = gr.Button("Visualize", variant="primary")
 
@@ -516,14 +521,14 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
 
     # Video visualization button
     visualize_btn.click(
-        fn=create_video_visualization,
-        inputs=[json_input_realtime],
+        fn=lambda json_file, style: create_video_visualization(json_file.name if json_file else None, style),
+        inputs=[json_input_realtime, viz_style],
         outputs=[video_visualization, stats_realtime],
     )
 
     # Auto-visualize after processing
     process_outputs.then(
-        fn=create_video_visualization,
+        fn=lambda json_path: create_video_visualization(json_path, "timeline") if json_path else (None, "No data file provided"),
         inputs=[json_output],
         outputs=[video_visualization, stats_realtime],
     )

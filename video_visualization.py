@@ -10,31 +10,53 @@ from persistence import load_detection_data
 
 def create_frame_data(json_path):
     """Create frame-by-frame detection data for visualization."""
-    data = load_detection_data(json_path)
-    if not data:
+    try:
+        data = load_detection_data(json_path)
+        if not data:
+            print("No data loaded from JSON file")
+            return None
+        
+        if "video_metadata" not in data or "frame_detections" not in data:
+            print("Invalid JSON structure: missing required fields")
+            return None
+        
+        # Extract video metadata
+        metadata = data["video_metadata"]
+        if "fps" not in metadata or "total_frames" not in metadata:
+            print("Invalid metadata: missing fps or total_frames")
+            return None
+            
+        fps = metadata["fps"]
+        total_frames = metadata["total_frames"]
+        
+        # Create frame data
+        frame_counts = {}
+        for frame_data in data["frame_detections"]:
+            if "frame" not in frame_data or "objects" not in frame_data:
+                continue  # Skip invalid frame data
+            frame_num = frame_data["frame"]
+            frame_counts[frame_num] = len(frame_data["objects"])
+        
+        # Fill in missing frames with 0 detections
+        for frame in range(total_frames):
+            if frame not in frame_counts:
+                frame_counts[frame] = 0
+        
+        if not frame_counts:
+            print("No valid frame data found")
+            return None
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(list(frame_counts.items()), columns=["frame", "detections"])
+        df["timestamp"] = df["frame"] / fps
+        
+        return df, metadata
+        
+    except Exception as e:
+        print(f"Error creating frame data: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
-    
-    # Extract video metadata
-    metadata = data["video_metadata"]
-    fps = metadata["fps"]
-    total_frames = metadata["total_frames"]
-    
-    # Create frame data
-    frame_counts = {}
-    for frame_data in data["frame_detections"]:
-        frame_num = frame_data["frame"]
-        frame_counts[frame_num] = len(frame_data["objects"])
-    
-    # Fill in missing frames with 0 detections
-    for frame in range(total_frames):
-        if frame not in frame_counts:
-            frame_counts[frame] = 0
-    
-    # Convert to DataFrame
-    df = pd.DataFrame(list(frame_counts.items()), columns=["frame", "detections"])
-    df["timestamp"] = df["frame"] / fps
-    
-    return df, metadata
 
 def generate_frame_image(df, frame_num, temp_dir, max_y):
     """Generate and save a single frame of the visualization."""
@@ -81,15 +103,85 @@ def generate_frame_image(df, frame_num, temp_dir, max_y):
     
     return frame_path
 
-def create_video_visualization(json_path):
+def generate_gauge_frame(df, frame_num, temp_dir):
+    """Generate a simple binary gauge visualization frame."""
+    # Set the style to dark background
+    plt.style.use('dark_background')
+    
+    # Set global font to monospace
+    plt.rcParams['font.family'] = 'monospace'
+    plt.rcParams['font.monospace'] = ['DejaVu Sans Mono']
+    
+    plt.figure(figsize=(8, 4))
+    
+    # Get current detection state
+    current_detections = df[df['frame'] == frame_num]['detections'].iloc[0]
+    has_detection = current_detections > 0
+    
+    # Create a simple gauge visualization
+    plt.axis('off')  # Hide axes
+    
+    # Draw the gauge background (semicircle)
+    circle = plt.Circle((0.5, 0), 0.8, fc='#1a1a1a', ec='#333333')
+    plt.gca().add_patch(circle)
+    plt.xlim(0, 1)
+    plt.ylim(-0.1, 0.9)
+    
+    # Add the needle
+    if has_detection:
+        color = '#00ff41'  # Matrix green for YES
+        angle = 45  # Point to YES
+        status = 'YES'
+    else:
+        color = '#ff0000'  # Red for NO
+        angle = -45  # Point to NO
+        status = 'NO'
+    
+    # Draw needle
+    needle_length = 0.6
+    x = 0.5 + needle_length * np.cos(np.radians(angle - 90))
+    y = 0 + needle_length * np.sin(np.radians(angle - 90))
+    plt.plot([0.5, x], [0, y], color=color, linewidth=3)
+    
+    # Add center dot
+    plt.plot(0.5, 0, 'o', color=color, markersize=10)
+    
+    # Add YES/NO labels
+    plt.text(0.85, 0.2, 'YES', color='#00ff41', fontsize=12, ha='center', va='center', family='monospace')
+    plt.text(0.15, 0.2, 'NO', color='#ff0000', fontsize=12, ha='center', va='center', family='monospace')
+    
+    # Add current status and frame number
+    plt.text(0.5, 0.7, f'DETECTION STATUS: {status}', color=color, 
+             fontsize=14, ha='center', va='center', family='monospace')
+    plt.text(0.5, 0.6, f'FRAME: {frame_num:04d}', color='#00ff41', 
+             fontsize=12, ha='center', va='center', family='monospace')
+    
+    # Save frame
+    frame_path = os.path.join(temp_dir, f'gauge_{frame_num:05d}.png')
+    plt.savefig(frame_path, bbox_inches='tight', dpi=100, facecolor='black', edgecolor='none')
+    plt.close()
+    
+    return frame_path
+
+def create_video_visualization(json_path, style="timeline"):
     """Create a video visualization of the detection data."""
     try:
+        if not json_path:
+            return None, "No JSON file provided"
+            
+        if not os.path.exists(json_path):
+            return None, f"File not found: {json_path}"
+            
         # Load and process data
-        frame_data, metadata = create_frame_data(json_path)
-        if frame_data is None:
-            return None, "No data found"
+        result = create_frame_data(json_path)
+        if result is None:
+            return None, "Failed to load detection data from JSON file"
+            
+        frame_data, metadata = result
+        if len(frame_data) == 0:
+            return None, "No frame data found in JSON file"
         
-        total_frames = metadata["total_frames"]  # Use metadata frame count
+        total_frames = metadata["total_frames"]
         
         # Create temporary directory for frames
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -99,15 +191,28 @@ def create_video_visualization(json_path):
             print("Generating frames...")
             frame_paths = []
             with tqdm(total=total_frames, desc="Generating frames") as pbar:
-                for frame in range(total_frames):  # Use total_frames instead of len(frame_data)
-                    frame_path = generate_frame_image(frame_data, frame, temp_dir, max_y)
-                    frame_paths.append(frame_path)
-                    pbar.update(1)
+                for frame in range(total_frames):
+                    try:
+                        if style == "gauge":
+                            frame_path = generate_gauge_frame(frame_data, frame, temp_dir)
+                        else:  # default to timeline
+                            frame_path = generate_frame_image(frame_data, frame, temp_dir, max_y)
+                        if frame_path and os.path.exists(frame_path):
+                            frame_paths.append(frame_path)
+                        else:
+                            print(f"Warning: Failed to generate frame {frame}")
+                        pbar.update(1)
+                    except Exception as e:
+                        print(f"Error generating frame {frame}: {str(e)}")
+                        continue
             
+            if not frame_paths:
+                return None, "Failed to generate any frames"
+                
             # Create output video path
             output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
             os.makedirs(output_dir, exist_ok=True)
-            output_video = os.path.join(output_dir, "detection_visualization.mp4")
+            output_video = os.path.join(output_dir, f"detection_visualization_{style}.mp4")
             
             # Create temp output path
             base, ext = os.path.splitext(output_video)
