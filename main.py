@@ -64,28 +64,41 @@ def generate_color_pair():
     light_rgb = [173, 216, 230]  # Light blue
     return dark_rgb, light_rgb
 
-def create_mask_overlay(image, mask):
-    """Create a mask overlay with contours for SAM visualization."""
-    # Convert binary mask to uint8
-    mask_uint8 = (mask > 0).astype(np.uint8)
+def create_mask_overlay(image, masks, points=None, labels=None):
+    """Create a mask overlay with contours for multiple SAM visualizations.
     
-    # Dilation to fill gaps
-    kernel = np.ones((5, 5), np.uint8)
-    mask_dilated = cv2.dilate(mask_uint8, kernel, iterations=1)
+    Args:
+        image: PIL Image to overlay masks on
+        masks: List of binary masks or single mask
+        points: Optional list of (x,y) points for labels
+        labels: Optional list of label strings for each point
+    """
+    # Convert single mask to list for uniform processing
+    if not isinstance(masks, list):
+        masks = [masks]
     
-    # Find contours of the dilated mask
-    contours, _ = cv2.findContours(mask_dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Create empty overlays
+    overlay = np.zeros((*image.size[::-1], 4), dtype=np.uint8)
+    outline = np.zeros((*image.size[::-1], 4), dtype=np.uint8)
     
-    # Generate random color pair for this segmentation
-    dark_color, light_color = generate_color_pair()
-    
-    # Create a transparent overlay for the mask
-    overlay = np.zeros((*mask.shape, 4), dtype=np.uint8)
-    overlay[mask_dilated > 0] = [*light_color, 90]  # Light color with 35% opacity
-    
-    # Create a separate layer for the outline
-    outline = np.zeros((*mask.shape, 4), dtype=np.uint8)
-    cv2.drawContours(outline, contours, -1, (*dark_color, 255), 2)  # Dark color outline
+    # Process each mask
+    for i, mask in enumerate(masks):
+        # Convert binary mask to uint8
+        mask_uint8 = (mask > 0).astype(np.uint8)
+        
+        # Dilation to fill gaps
+        kernel = np.ones((5, 5), np.uint8)
+        mask_dilated = cv2.dilate(mask_uint8, kernel, iterations=1)
+        
+        # Find contours of the dilated mask
+        contours, _ = cv2.findContours(mask_dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Generate random color pair for this segmentation
+        dark_color, light_color = generate_color_pair()
+        
+        # Add to the overlays
+        overlay[mask_dilated > 0] = [*light_color, 90]  # Light color with 35% opacity
+        cv2.drawContours(outline, contours, -1, (*dark_color, 255), 2)  # Dark color outline
     
     # Convert to PIL images
     mask_overlay = Image.fromarray(overlay, 'RGBA')
@@ -96,10 +109,31 @@ def create_mask_overlay(image, mask):
     result.paste(mask_overlay, (0, 0), mask_overlay)
     result.paste(outline_overlay, (0, 0), outline_overlay)
     
+    # Add labels if provided
+    if points and labels:
+        result_array = np.array(result)
+        for (x, y), label in zip(points, labels):
+            label_size = cv2.getTextSize(label, FONT, 0.5, 1)[0]
+            cv2.putText(
+                result_array,
+                label,
+                (int(x - label_size[0] // 2), int(y - 20)),
+                FONT,
+                0.5,
+                (255, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
+        result = Image.fromarray(result_array)
+    
     return result
 
 def process_sam_detection(image, center_x, center_y, slim=False):
-    """Process a single detection point with SAM."""
+    """Process a single detection point with SAM.
+    
+    Returns:
+        tuple: (mask, result_pil) where mask is the binary mask and result_pil is the visualization
+    """
     if not isinstance(image, Image.Image):
         image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
     
@@ -124,7 +158,7 @@ def process_sam_detection(image, center_x, center_y, slim=False):
     
     # Create the visualization
     result = create_mask_overlay(image, mask)
-    return result
+    return mask, result
 
 def load_moondream():
     """Load Moondream model and tokenizer."""
@@ -461,6 +495,41 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
             print(f"Error during point detection: {str(e)}")
             points = []
 
+    # If box_style is SAM, prepare to accumulate masks
+    if box_style in ["sam", "sam-fast"] and points:
+        # Start with the original PIL image
+        frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        
+        # Collect all masks and points
+        all_masks = []
+        point_coords = []
+        point_labels = []
+        
+        for point in points:
+            try:
+                print(f"Processing point for SAM: {point}")
+                center_x = int(float(point["x"]) * width)
+                center_y = int(float(point["y"]) * height)
+                print(f"Converted SAM coordinates: ({center_x}, {center_y})")
+
+                # Get mask and visualization
+                mask, _ = process_sam_detection(frame_pil, center_x, center_y, slim=(box_style == "sam-fast"))
+                
+                # Collect mask and point data
+                all_masks.append(mask)
+                point_coords.append((center_x, center_y))
+                point_labels.append(detect_keyword)
+                
+            except Exception as e:
+                print(f"Error processing individual SAM point: {str(e)}")
+                print(f"Point data: {point}")
+        
+        if all_masks:
+            # Create final visualization with all masks
+            result_pil = create_mask_overlay(frame_pil, all_masks, point_coords, point_labels)
+            frame = cv2.cvtColor(np.array(result_pil), cv2.COLOR_RGB2BGR)
+
+    # Rest of the function remains unchanged
     for detection in detected_objects:
         try:
             # Handle both tracked and untracked detections
@@ -528,35 +597,6 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
                                 )
                             except Exception as e:
                                 print(f"Error processing individual point: {str(e)}")
-                                print(f"Point data: {point}")
-                elif box_style in ["sam", "sam-fast"]:
-                    if points:
-                        for point in points:
-                            try:
-                                print(f"Processing point for SAM: {point}")
-                                center_x = int(float(point["x"]) * width)
-                                center_y = int(float(point["y"]) * height)
-                                print(f"Converted SAM coordinates: ({center_x}, {center_y})")
-
-                                result_pil = process_sam_detection(frame_pil, center_x, center_y, slim=(box_style == "sam-fast"))
-                                
-                                frame = cv2.cvtColor(np.array(result_pil), cv2.COLOR_RGB2BGR)
-
-                                # Add tracking ID to label if available
-                                label = f"{detect_keyword} {track_id}" if track_id is not None else detect_keyword
-                                label_size = cv2.getTextSize(label, FONT, 0.5, 1)[0]
-                                cv2.putText(
-                                    frame,
-                                    label,
-                                    (center_x - label_size[0] // 2, center_y - 20),
-                                    FONT,
-                                    0.5,
-                                    (255, 255, 255),
-                                    1,
-                                    cv2.LINE_AA,
-                                )
-                            except Exception as e:
-                                print(f"Error processing individual SAM point: {str(e)}")
                                 print(f"Point data: {point}")
 
         except Exception as e:
