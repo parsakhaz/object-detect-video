@@ -22,3 +22,5 @@ plotly
 # DeepSORT dependencies
 deep-sort-realtime>=1.3.2
 scikit-learn  # Required for deep-sort-realtime
+# Scene detection dependencies (for intelligent scene-aware tracking)
+scenedetect[opencv]>=0.6.2  # Provides scene change detection capabilities

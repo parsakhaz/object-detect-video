@@ -9,6 +9,7 @@ from datetime import datetime
 import colorsys
 import random
 from deep_sort_integration import DeepSORTTracker
+from scenedetect import detect, ContentDetector
 
 # Constants
 TEST_MODE_DURATION = 3  # Process only first 3 seconds in test mode
@@ -863,13 +864,62 @@ def process_video(
         # Get video properties
         props = get_video_properties(video_path)
         
-        # Get raw detections
-        raw_ad_detections = describe_frames(
-            video_path, model, tokenizer, target_object, test_mode, grid_rows, grid_cols
-        )
+        # Initialize scene detector with ContentDetector
+        scene_detector = ContentDetector(threshold=30.0)  # Adjust threshold as needed
         
+        # Initialize DeepSORT tracker
+        tracker = DeepSORTTracker()
+
+        # If in test mode, only process first 3 seconds
+        if test_mode:
+            frame_count = min(int(props["fps"] * TEST_MODE_DURATION), props["frame_count"])
+        else:
+            frame_count = props["frame_count"]
+
+        ad_detections = {}  # Store detection results by frame number
+
+        print("Extracting frames and detecting objects...")
+        video = cv2.VideoCapture(video_path)
+
+        # Detect scenes first
+        scenes = detect(video_path, scene_detector)
+        scene_changes = set(end.get_frames() for _, end in scenes)
+        print(f"Detected {len(scenes)} scenes")
+
+        frame_count_processed = 0
+        with tqdm(total=frame_count) as pbar:
+            while frame_count_processed < frame_count:
+                ret, frame = video.read()
+                if not ret:
+                    break
+
+                # Check if current frame is a scene change
+                if frame_count_processed in scene_changes:
+                    print(f"Scene change detected at frame {frame_count_processed}. Resetting tracker.")
+                    tracker.reset()
+
+                # Detect objects in the frame
+                detected_objects = detect_objects_in_frame(
+                    model, tokenizer, frame, target_object, grid_rows=grid_rows, grid_cols=grid_cols
+                )
+
+                # Update tracker with current detections
+                tracked_objects = tracker.update(frame, detected_objects)
+
+                # Store results for every frame, even if empty
+                ad_detections[frame_count_processed] = tracked_objects
+
+                frame_count_processed += 1
+                pbar.update(1)
+
+        video.release()
+
+        if frame_count_processed == 0:
+            print("No frames could be read from video")
+            return {}
+
         # Apply filtering
-        filtered_ad_detections = filter_temporal_outliers(raw_ad_detections)
+        filtered_ad_detections = filter_temporal_outliers(ad_detections)
         
         # Build detection data structure
         detection_data = {

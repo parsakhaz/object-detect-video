@@ -6,11 +6,21 @@ from datetime import datetime
 class DeepSORTTracker:
     def __init__(self, max_age=5):
         """Initialize DeepSORT tracker."""
-        self.tracker = DeepSort(
-            max_age=max_age,
+        self.max_age = max_age
+        self.tracker = self._create_tracker()
+        
+    def _create_tracker(self):
+        """Create a new instance of DeepSort tracker."""
+        return DeepSort(
+            max_age=self.max_age,
             embedder='mobilenet',  # Using default MobileNetV2 embedder
             today=datetime.now().date()  # For track naming and daily ID reset
         )
+        
+    def reset(self):
+        """Reset the tracker state by creating a new instance."""
+        print("Resetting DeepSORT tracker...")
+        self.tracker = self._create_tracker()
         
     def update(self, frame, detections):
         """Update tracking with new detections.

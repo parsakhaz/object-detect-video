@@ -28,6 +28,11 @@ Links:
   - Hitmarker: Call of Duty style crosshair markers
   - SAM: Segment Anything Model segmentation
   - Fast SAM: Faster but less detailed segmentation
+- Intelligent scene detection and tracking:
+  - Automatic scene change detection
+  - DeepSORT tracking with scene-aware reset
+  - Persistent object tracking across frames
+  - Smart tracker reset at scene boundaries
 - Optional grid-based detection for improved accuracy
 - Flexible object type detection using natural language
 - Frame-by-frame processing with IoU-based merging
@@ -304,3 +309,27 @@ The detection data is saved in JSON format with the following structure:
   - Grid-based detection increases processing time
   - Test mode processes only first 3 seconds
   - Some visualization features require sufficient detection data
+
+## Technical Details
+
+### Scene Detection and Tracking
+
+The tool uses advanced scene detection and object tracking:
+
+1. Scene Detection:
+   - Powered by PySceneDetect's ContentDetector
+   - Automatically identifies scene changes in videos
+   - Configurable detection threshold (default: 30.0)
+   - Helps maintain tracking accuracy across scene boundaries
+
+2. Object Tracking:
+   - DeepSORT tracking for consistent object identification
+   - Automatic tracker reset at scene changes
+   - Maintains object identity within scenes
+   - Prevents tracking errors across scene boundaries
+
+3. Integration Benefits:
+   - More accurate object tracking
+   - Better handling of scene transitions
+   - Reduced false positives in tracking
+   - Improved tracking consistency
