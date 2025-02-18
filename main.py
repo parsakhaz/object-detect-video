@@ -572,6 +572,24 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
                         2,
                         cv2.LINE_AA,
                     )
+                elif box_style == "fuzzy-blur":
+                    # Extract ROI
+                    roi = frame[y1:y2, x1:x2]
+                    # Apply Gaussian blur with much larger kernel for intense blur
+                    blurred_roi = cv2.GaussianBlur(roi, (125, 125), 0)
+                    # Replace original ROI with blurred version
+                    frame[y1:y2, x1:x2] = blurred_roi
+                elif box_style == "pixelated-blur":
+                    # Extract ROI
+                    roi = frame[y1:y2, x1:x2]
+                    # Pixelate by resizing down and up
+                    h, w = roi.shape[:2]
+                    temp = cv2.resize(roi, (10, 10), interpolation=cv2.INTER_LINEAR)
+                    pixelated = cv2.resize(temp, (w, h), interpolation=cv2.INTER_NEAREST)
+                    # Apply light Gaussian blur to smooth edges
+                    blurred_pixelated = cv2.GaussianBlur(pixelated, (5, 5), 0)
+                    # Replace original ROI
+                    frame[y1:y2, x1:x2] = blurred_pixelated
                 elif box_style == "hitmarker":
                     if points:
                         for point in points:
@@ -1024,7 +1042,7 @@ def main():
     )
     parser.add_argument(
         "--box-style",
-        choices=["censor", "bounding-box", "hitmarker", "sam", "sam-fast"],
+        choices=["censor", "bounding-box", "hitmarker", "sam", "sam-fast", "fuzzy-blur", "pixelated-blur"],
         default="censor",
         help="Style of detection visualization (default: censor)",
     )

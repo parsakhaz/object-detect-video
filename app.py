@@ -325,10 +325,10 @@ with gr.Blocks(title="Promptable Video Redaction") as app:
 
                     with gr.Accordion("Advanced Settings", open=False):
                         box_style_input = gr.Radio(
-                            choices=["censor", "bounding-box", "hitmarker", "sam", "sam-fast"],
+                            choices=["censor", "bounding-box", "hitmarker", "sam", "sam-fast", "fuzzy-blur", "pixelated-blur"],
                             value="censor",
                             label="Visualization Style",
-                            info="Choose how to display detections: censor (black boxes), bounding-box (red boxes with labels), hitmarker (COD-style markers), sam (precise segmentation), or sam-fast (faster but less precise segmentation)",
+                            info="Choose how to display detections: censor (black boxes), bounding-box (red boxes with labels), hitmarker (COD-style markers), sam (precise segmentation), sam-fast (faster but less precise segmentation), fuzzy-blur (Gaussian blur), pixelated-blur (pixelated with blur)",
                         )
                         preset_input = gr.Dropdown(
                             choices=[
