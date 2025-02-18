@@ -287,10 +287,10 @@ Video metadata:
         return None, None, None, None, None, None, None, None, f"Error creating visualization: {str(e)}"
 
 # Create the Gradio interface
-with gr.Blocks(title="Promptable Video Redaction") as app:
+with gr.Blocks(title="Promptable Content Moderation") as app:
     with gr.Tabs():
         with gr.Tab("Process Video"):
-            gr.Markdown("# Promptable Video Redaction with Moondream")
+            gr.Markdown("# Promptable Content Moderation with Moondream")
             gr.Markdown(
                 """
             [Moondream 2B](https://github.com/vikhyat/moondream) is a lightweight vision model that detects and visualizes objects in videos. It can identify objects, people, text and more.
