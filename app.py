@@ -526,12 +526,5 @@ with gr.Blocks(title="Promptable Content Moderation") as app:
         outputs=[video_visualization, stats_realtime],
     )
 
-    # Auto-visualize after processing
-    process_outputs.then(
-        fn=lambda json_path: create_video_visualization(json_path, "timeline") if json_path else (None, "No data file provided"),
-        inputs=[json_output],
-        outputs=[video_visualization, stats_realtime],
-    )
-
 if __name__ == "__main__":
     app.launch(share=True)
