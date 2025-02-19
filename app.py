@@ -25,12 +25,8 @@ print(f"Is CUDA available: {torch.cuda.is_available()}")
 print(f"CUDA device: {torch.cuda.get_device_name(torch.cuda.current_device())}")
 # GPU Name
 
-# Initialize models globally for reuse
-print("Loading Moondream model...")
-model, tokenizer = load_moondream()
-print("Loading SAM model...")
-sam_model, sam_processor = load_sam_model()
-
+# Initialize Moondream model globally for reuse (will be loaded on first use)
+model, tokenizer = None, None
 
 # Uncomment for Hugging Face Spaces
 # @spaces.GPU(duration=120)
@@ -41,6 +37,11 @@ def process_video_file(
     try:
         if not video_file:
             raise gr.Error("Please upload a video file")
+
+        # Load models if not already loaded
+        global model, tokenizer
+        if model is None or tokenizer is None:
+            model, tokenizer = load_moondream()
 
         # Ensure input/output directories exist using absolute paths
         inputs_dir = os.path.join(WORKSPACE_ROOT, "inputs")
@@ -178,7 +179,7 @@ def create_visualization_plots(json_path):
                 plt.title("Detection Center Heatmap")
 
             elif plot_num == 4:
-                # Plot 5: NEW - Time-based Detection Density
+                # Plot 5: Time-based Detection Density
                 # Shows when in the video most detections occur
                 df["time_bucket"] = pd.qcut(df["timestamp"], q=20, labels=False)
                 time_density = df.groupby("time_bucket").size()
@@ -188,7 +189,7 @@ def create_visualization_plots(json_path):
                 plt.title("Detection Density Over Video Duration")
 
             elif plot_num == 5:
-                # Plot 6: NEW - Screen Region Analysis
+                # Plot 6: Screen Region Analysis
                 # Divide screen into 3x3 grid and show detection counts
                 try:
                     df["grid_x"] = pd.qcut(df["center_x"], q=3, labels=["Left", "Center", "Right"], duplicates='drop')
@@ -208,7 +209,7 @@ def create_visualization_plots(json_path):
                     plt.title("Screen Region Analysis (Not Available)")
 
             elif plot_num == 6:
-                # Plot 7: NEW - Detection Size Categories
+                # Plot 7: Detection Size Categories
                 # Categorize detections by size for content moderation
                 try:
                     size_labels = [
@@ -237,7 +238,7 @@ def create_visualization_plots(json_path):
                     plt.title("Detection Size Distribution (Not Available)")
 
             elif plot_num == 7:
-                # Plot 8: NEW - Temporal Pattern Analysis
+                # Plot 8: Temporal Pattern Analysis
                 # Show patterns of when detections occur in sequence
                 try:
                     detection_gaps = df.sort_values("frame")["frame"].diff()

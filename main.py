@@ -10,6 +10,7 @@ import colorsys
 import random
 from deep_sort_integration import DeepSORTTracker
 from scenedetect import detect, ContentDetector
+from functools import lru_cache
 
 # Constants
 TEST_MODE_DURATION = 3  # Process only first 3 seconds in test mode
@@ -39,25 +40,34 @@ HITMARKER_SHADOW_OFFSET = 1  # Smaller shadow offset
 
 # SAM parameters
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Initialize model variables as None
 sam_model = None
 sam_processor = None
 slimsam_model = None
 slimsam_processor = None
 
-def load_sam_model(slim=False):
-    """Load SAM model and processor."""
+@lru_cache(maxsize=2)  # Cache both regular and slim SAM models
+def get_sam_model(slim=False):
+    """Get cached SAM model and processor."""
     global sam_model, sam_processor, slimsam_model, slimsam_processor
     
     if slim:
         if slimsam_model is None:
+            print("Loading SlimSAM model for the first time...")
             slimsam_model = SamModel.from_pretrained("nielsr/slimsam-50-uniform").to(device)
             slimsam_processor = SamProcessor.from_pretrained("nielsr/slimsam-50-uniform")
         return slimsam_model, slimsam_processor
     else:
         if sam_model is None:
+            print("Loading SAM model for the first time...")
             sam_model = SamModel.from_pretrained("facebook/sam-vit-huge").to(device)
             sam_processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
         return sam_model, sam_processor
+
+def load_sam_model(slim=False):
+    """Load SAM model and processor with caching."""
+    return get_sam_model(slim=slim)
 
 def generate_color_pair():
     """Generate a generic light blue and dark blue color pair for SAM visualization."""
@@ -138,8 +148,8 @@ def process_sam_detection(image, center_x, center_y, slim=False):
     if not isinstance(image, Image.Image):
         image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
     
-    # Get appropriate model based on slim parameter
-    model, processor = load_sam_model(slim)
+    # Get appropriate model from cache
+    model, processor = get_sam_model(slim)
     
     # Process the image with SAM
     inputs = processor(
@@ -480,13 +490,11 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
     height, width = frame.shape[:2]
 
     points = []
+    # Only get points if we need them for hitmarker or SAM styles
     if box_style in ["hitmarker", "sam", "sam-fast"]:
         frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        print(f"\nCalling model.point with keyword: {detect_keyword}")
         try:
             point_response = model.point(frame_pil, detect_keyword)
-            print(f"Points returned from model: {point_response}")
-            print(f"Type of response: {type(point_response)}")
             
             if isinstance(point_response, dict) and 'points' in point_response:
                 points = point_response['points']
@@ -496,7 +504,7 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
             print(f"Error during point detection: {str(e)}")
             points = []
 
-    # If box_style is SAM, prepare to accumulate masks
+    # Only load SAM models and process points if we're using SAM styles and have points
     if box_style in ["sam", "sam-fast"] and points:
         # Start with the original PIL image
         frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
@@ -508,10 +516,8 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
         
         for point in points:
             try:
-                print(f"Processing point for SAM: {point}")
                 center_x = int(float(point["x"]) * width)
                 center_y = int(float(point["y"]) * height)
-                print(f"Converted SAM coordinates: ({center_x}, {center_y})")
 
                 # Get mask and visualization
                 mask, _ = process_sam_detection(frame_pil, center_x, center_y, slim=(box_style == "sam-fast"))
@@ -530,7 +536,7 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
             result_pil = create_mask_overlay(frame_pil, all_masks, point_coords, point_labels)
             frame = cv2.cvtColor(np.array(result_pil), cv2.COLOR_RGB2BGR)
 
-    # Rest of the function remains unchanged
+    # Process other visualization styles
     for detection in detected_objects:
         try:
             # Handle both tracked and untracked detections
