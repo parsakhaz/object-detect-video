@@ -560,8 +560,7 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
                 elif box_style == "bounding-box":
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
 
-                    # Add tracking ID to label if available
-                    label = f"{detect_keyword} {track_id}" if track_id is not None else detect_keyword
+                    label = f"{detect_keyword}" if track_id is not None else detect_keyword
                     label_size = cv2.getTextSize(label, FONT, 0.7, 2)[0]
                     cv2.rectangle(
                         frame, (x1, y1 - 25), (x1 + label_size[0], y1), (0, 0, 255), -1
@@ -699,8 +698,7 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
 
                                 draw_hitmarker(frame, center_x, center_y)
 
-                                # Add tracking ID to label if available
-                                label = f"{detect_keyword} {track_id}" if track_id is not None else detect_keyword
+                                label = f"{detect_keyword}" if track_id is not None else detect_keyword
                                 label_size = cv2.getTextSize(label, FONT, 0.5, 1)[0]
                                 cv2.putText(
                                     frame,
