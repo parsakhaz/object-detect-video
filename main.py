@@ -13,7 +13,7 @@ from scenedetect import detect, ContentDetector
 from functools import lru_cache
 
 # Constants
-TEST_MODE_DURATION = 3  # Process only first 3 seconds in test mode
+DEFAULT_TEST_MODE_DURATION = 3  # Process only first 3 seconds in test mode by default
 FFMPEG_PRESETS = [
     "ultrafast",
     "superfast",
@@ -498,8 +498,6 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
             
             if isinstance(point_response, dict) and 'points' in point_response:
                 points = point_response['points']
-                if points:
-                    print(f"First point: {points[0]}")
         except Exception as e:
             print(f"Error during point detection: {str(e)}")
             points = []
@@ -764,7 +762,7 @@ def filter_temporal_outliers(detections_dict):
     return filtered_detections
 
 
-def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=False, grid_rows=1, grid_cols=1):
+def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=False, test_duration=DEFAULT_TEST_MODE_DURATION, grid_rows=1, grid_cols=1):
     """Extract and detect objects in frames."""
     props = get_video_properties(video_path)
     fps = props["fps"]
@@ -772,9 +770,9 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
     # Initialize DeepSORT tracker
     tracker = DeepSORTTracker()
 
-    # If in test mode, only process first 3 seconds
+    # If in test mode, only process first N seconds
     if test_mode:
-        frame_count = min(int(fps * TEST_MODE_DURATION), props["frame_count"])
+        frame_count = min(int(fps * test_duration), props["frame_count"])
     else:
         frame_count = props["frame_count"]
 
@@ -783,7 +781,11 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
     print("Extracting frames and detecting objects...")
     video = cv2.VideoCapture(video_path)
 
-    # Process every frame
+    # Detect scenes first
+    scenes = detect(video_path, scene_detector)
+    scene_changes = set(end.get_frames() for _, end in scenes)
+    print(f"Detected {len(scenes)} scenes")
+
     frame_count_processed = 0
     with tqdm(total=frame_count) as pbar:
         while frame_count_processed < frame_count:
@@ -791,10 +793,12 @@ def describe_frames(video_path, model, tokenizer, detect_keyword, test_mode=Fals
             if not ret:
                 break
 
-            # Detect objects in the frame
-            detected_objects = detect_objects_in_frame(
-                model, tokenizer, frame, detect_keyword, grid_rows=grid_rows, grid_cols=grid_cols
-            )
+            # Check if current frame is a scene change
+            if frame_count_processed in scene_changes:
+                # Detect objects in the frame
+                detected_objects = detect_objects_in_frame(
+                    model, tokenizer, frame, detect_keyword, grid_rows=grid_rows, grid_cols=grid_cols
+                )
 
             # Update tracker with current detections
             tracked_objects = tracker.update(frame, detected_objects)
@@ -822,6 +826,7 @@ def create_detection_video(
     output_path=None,
     ffmpeg_preset="medium",
     test_mode=False,
+    test_duration=DEFAULT_TEST_MODE_DURATION,
     box_style="censor",
 ):
     """Create video with detection boxes while preserving audio."""
@@ -851,7 +856,7 @@ def create_detection_video(
 
     # If in test mode, only process first few seconds
     if test_mode:
-        frame_count = min(int(fps * TEST_MODE_DURATION), props["frame_count"])
+        frame_count = min(int(fps * test_duration), props["frame_count"])
     else:
         frame_count = props["frame_count"]
 
@@ -965,6 +970,7 @@ def process_video(
     video_path,
     target_object,
     test_mode=False,
+    test_duration=DEFAULT_TEST_MODE_DURATION,
     ffmpeg_preset="medium",
     grid_rows=1,
     grid_cols=1,
@@ -988,9 +994,9 @@ def process_video(
         # Initialize DeepSORT tracker
         tracker = DeepSORTTracker()
 
-        # If in test mode, only process first 3 seconds
+        # If in test mode, only process first N seconds
         if test_mode:
-            frame_count = min(int(props["fps"] * TEST_MODE_DURATION), props["frame_count"])
+            frame_count = min(int(props["fps"] * test_duration), props["frame_count"])
         else:
             frame_count = props["frame_count"]
 
@@ -1068,7 +1074,7 @@ def process_video(
                         for box, kw, *track_id in [detection]  # Unpack detection tuple, track_id will be empty list if not present
                     ]
                 }
-                for frame_num in range(props["frame_count"] if not test_mode else min(int(props["fps"] * TEST_MODE_DURATION), props["frame_count"]))
+                for frame_num in range(props["frame_count"] if not test_mode else min(int(props["fps"] * test_duration), props["frame_count"]))
             ]
         }
         
@@ -1090,6 +1096,7 @@ def process_video(
             model,
             ffmpeg_preset=ffmpeg_preset,
             test_mode=test_mode,
+            test_duration=test_duration,
             box_style=box_style,
         )
 
@@ -1115,6 +1122,12 @@ def main():
     )
     parser.add_argument(
         "--test", action="store_true", help="Process only first 3 seconds of each video"
+    )
+    parser.add_argument(
+        "--test-duration",
+        type=int,
+        default=DEFAULT_TEST_MODE_DURATION,
+        help=f"Number of seconds to process in test mode (default: {DEFAULT_TEST_MODE_DURATION})"
     )
     parser.add_argument(
         "--preset",
@@ -1178,6 +1191,7 @@ def main():
             video_path,
             args.detect,
             test_mode=args.test,
+            test_duration=args.test_duration,
             ffmpeg_preset=args.preset,
             grid_rows=args.rows,
             grid_cols=args.cols,

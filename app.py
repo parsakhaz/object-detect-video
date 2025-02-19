@@ -31,7 +31,7 @@ model, tokenizer = None, None
 # Uncomment for Hugging Face Spaces
 # @spaces.GPU(duration=120)
 def process_video_file(
-    video_file, target_object, box_style, ffmpeg_preset, grid_rows, grid_cols, test_mode
+    video_file, target_object, box_style, ffmpeg_preset, grid_rows, grid_cols, test_mode, test_duration
 ):
     """Process a video file through the Gradio interface."""
     try:
@@ -60,6 +60,7 @@ def process_video_file(
                 input_video_path,
                 target_object,
                 test_mode=test_mode,
+                test_duration=test_duration,
                 ffmpeg_preset=ffmpeg_preset,
                 grid_rows=grid_rows,
                 grid_cols=grid_cols,
@@ -360,6 +361,15 @@ with gr.Blocks(title="Promptable Content Moderation") as app:
                             info="Enable to quickly test settings on a short clip before processing the full video (recommended). If using the data visualizations, disable.",
                         )
 
+                        test_duration_input = gr.Slider(
+                            minimum=1,
+                            maximum=10,
+                            value=3,
+                            step=1,
+                            label="Test Mode Duration (seconds)",
+                            info="Number of seconds to process in test mode"
+                        )
+
                         gr.Markdown(
                             """
                         Note: Processing in test mode will only process the first 3 seconds of the video and is recommended for testing settings.
@@ -502,6 +512,7 @@ with gr.Blocks(title="Promptable Content Moderation") as app:
             rows_input,
             cols_input,
             test_mode_input,
+            test_duration_input,
         ],
         outputs=[video_output, json_output],
     )
