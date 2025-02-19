@@ -29,6 +29,10 @@ Links:
   - Hitmarker: Call of Duty style crosshair markers
   - SAM: Segment Anything Model segmentation
   - Fast SAM: Faster but less detailed segmentation
+  - Fuzzy-blur: Gaussian blur effect over detected objects
+  - Pixelated-blur: Pixelation with blur effect
+  - Intense-pixelated-blur: Stronger pixelation and blur
+  - Obfuscated-pixel: Advanced pixelation with background blending
 - Intelligent scene detection and tracking:
   - Automatic scene change detection
   - DeepSORT tracking with scene-aware reset
@@ -50,6 +54,12 @@ Links:
 
 ### Python Dependencies
 
+For Windows users, before installing other requirements, first install PyTorch with CUDA support:
+```bash
+pip install torch==2.5.1+cu121 torchvision==0.20.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+```
+
+Then install the remaining dependencies:
 ```bash
 pip install -r requirements.txt
 ```
@@ -189,6 +199,10 @@ python main.py --box-style bounding-box  # Boxes with labels
 python main.py --box-style hitmarker   # COD-style markers
 python main.py --box-style sam         # SAM segmentation
 python main.py --box-style sam-fast    # Fast SAM segmentation
+python main.py --box-style fuzzy-blur  # Gaussian blur effect
+python main.py --box-style pixelated-blur  # Pixelation with blur
+python main.py --box-style intense-pixelated-blur  # Strong pixelation
+python main.py --box-style obfuscated-pixel  # Advanced pixelation
 ```
 
 - `--rows` and `--cols`: Enable grid-based detection
