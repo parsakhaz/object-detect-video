@@ -580,6 +580,20 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
                     # Replace original ROI with blurred version
                     frame[y1:y2, x1:x2] = blurred_roi
                 elif box_style == "pixelated-blur":
+                    # Extract ROI
+                    roi = frame[y1:y2, x1:x2]
+                    # Pixelate by resizing down and up
+                    h, w = roi.shape[:2]
+                    temp = cv2.resize(roi, (10, 10), interpolation=cv2.INTER_LINEAR)
+                    pixelated = cv2.resize(temp, (w, h), interpolation=cv2.INTER_NEAREST)
+                    # Mix up the pixelated frame slightly by adding random noise
+                    noise = np.random.randint(0, 50, (h, w, 3), dtype=np.uint8)
+                    pixelated = cv2.add(pixelated, noise)
+                    # Apply stronger Gaussian blur to smooth edges
+                    blurred_pixelated = cv2.GaussianBlur(pixelated, (15, 15), 0)
+                    # Replace original ROI
+                    frame[y1:y2, x1:x2] = blurred_pixelated
+                elif box_style == "intense-pixelated-blur":
                     # Expand the bounding box by pixels in all directions
                     x1_expanded = max(0, x1 - 15)
                     y1_expanded = max(0, y1 - 15)
@@ -1051,7 +1065,7 @@ def main():
     )
     parser.add_argument(
         "--box-style",
-        choices=["censor", "bounding-box", "hitmarker", "sam", "sam-fast", "fuzzy-blur", "pixelated-blur"],
+        choices=["censor", "bounding-box", "hitmarker", "sam", "sam-fast", "fuzzy-blur", "pixelated-blur", "intense-pixelated-blur"],
         default="censor",
         help="Style of detection visualization (default: censor)",
     )
