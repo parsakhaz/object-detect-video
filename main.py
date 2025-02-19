@@ -855,8 +855,10 @@ def create_detection_video(
     # If in test mode, only process first few seconds
     if test_mode:
         frame_count = min(int(fps * test_duration), props["frame_count"])
+        print(f"Test mode enabled: Processing first {test_duration} seconds ({frame_count} frames)")
     else:
         frame_count = props["frame_count"]
+        print("Full video mode: Processing entire video")
 
     video = cv2.VideoCapture(video_path)
 
@@ -895,19 +897,37 @@ def create_detection_video(
 
     # Extract audio from original video
     try:
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-i",
-                video_path,
-                "-vn",  # No video
-                "-acodec",
-                "copy",
-                temp_audio,
-            ],
-            check=True,
-        )
+        if test_mode:
+            # In test mode, extract only the required duration of audio
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    video_path,
+                    "-t",
+                    str(test_duration),
+                    "-vn",  # No video
+                    "-acodec",
+                    "copy",
+                    temp_audio,
+                ],
+                check=True,
+            )
+        else:
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    video_path,
+                    "-vn",  # No video
+                    "-acodec",
+                    "copy",
+                    temp_audio,
+                ],
+                check=True,
+            )
     except subprocess.CalledProcessError as e:
         print(f"Error extracting audio: {str(e)}")
         if os.path.exists(temp_output):
@@ -916,32 +936,43 @@ def create_detection_video(
 
     # Merge processed video with original audio
     try:
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-i",
-                temp_output,
-                "-i",
-                temp_audio,
-                "-c:v",
-                "libx264",
-                "-preset",
-                ffmpeg_preset,
-                "-crf",
-                "23",
-                "-c:a",
-                "aac",
-                "-b:a",
-                "192k",
-                "-movflags",
-                "+faststart",  # Better web playback
-                "-loglevel",
-                "error",
-                output_path,
-            ],
-            check=True,
-        )
+        # Base FFmpeg command
+        ffmpeg_cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            temp_output,
+            "-i",
+            temp_audio,
+            "-c:v",
+            "libx264",
+            "-preset",
+            ffmpeg_preset,
+            "-crf",
+            "23",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-movflags",
+            "+faststart",  # Better web playback
+        ]
+
+        if test_mode:
+            # In test mode, ensure output duration matches test_duration
+            ffmpeg_cmd.extend([
+                "-t",
+                str(test_duration),
+                "-shortest"  # Ensure output duration matches shortest input
+            ])
+
+        ffmpeg_cmd.extend([
+            "-loglevel",
+            "error",
+            output_path
+        ])
+
+        subprocess.run(ffmpeg_cmd, check=True)
 
         # Clean up temporary files
         os.remove(temp_output)
