@@ -325,10 +325,10 @@ with gr.Blocks(title="Promptable Content Moderation") as app:
 
                     with gr.Accordion("Advanced Settings", open=False):
                         box_style_input = gr.Radio(
-                            choices=["censor", "bounding-box", "hitmarker", "sam", "sam-fast", "fuzzy-blur", "pixelated-blur"],
+                            choices=["censor", "bounding-box", "hitmarker", "sam", "sam-fast", "fuzzy-blur", "pixelated-blur", "intense-pixelated-blur", "obfuscated-pixel"],
                             value="censor",
                             label="Visualization Style",
-                            info="Choose how to display detections: censor (black boxes), bounding-box (red boxes with labels), hitmarker (COD-style markers), sam (precise segmentation), sam-fast (faster but less precise segmentation), fuzzy-blur (Gaussian blur), pixelated-blur (pixelated with blur)",
+                            info="Choose how to display detections: censor (black boxes), bounding-box (red boxes with labels), hitmarker (COD-style markers), sam (precise segmentation), sam-fast (faster but less precise segmentation), fuzzy-blur (Gaussian blur), pixelated-blur (pixelated with blur), obfuscated-pixel (advanced pixelation with neighborhood averaging)",
                         )
                         preset_input = gr.Dropdown(
                             choices=[

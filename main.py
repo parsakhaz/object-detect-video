@@ -593,6 +593,77 @@ def draw_ad_boxes(frame, detected_objects, detect_keyword, model, box_style="cen
                     blurred_pixelated = cv2.GaussianBlur(pixelated, (15, 15), 0)
                     # Replace original ROI
                     frame[y1:y2, x1:x2] = blurred_pixelated
+                elif box_style == "obfuscated-pixel":
+                    # Calculate expansion amount based on 10% of object dimensions
+                    box_width = x2 - x1
+                    box_height = y2 - y1
+                    expand_x = int(box_width * 0.10)
+                    expand_y = int(box_height * 0.10)
+                    
+                    # Expand the bounding box by 10% in all directions
+                    x1_expanded = max(0, x1 - expand_x)
+                    y1_expanded = max(0, y1 - expand_y)
+                    x2_expanded = min(width - 1, x2 + expand_x)
+                    y2_expanded = min(height - 1, y2 + expand_y)
+                    
+                    # Extract ROI with much larger padding for true background sampling
+                    padding = 100  # Much larger padding to get true background
+                    y1_pad = max(0, y1_expanded - padding)
+                    y2_pad = min(height, y2_expanded + padding)
+                    x1_pad = max(0, x1_expanded - padding)
+                    x2_pad = min(width, x2_expanded + padding)
+                    
+                    # Get the padded region including background
+                    padded_roi = frame[y1_pad:y2_pad, x1_pad:x2_pad]
+                    
+                    # Create mask that excludes a larger region around the detection
+                    h, w = y2_expanded - y1_expanded, x2_expanded - x1_expanded
+                    bg_mask = np.ones(padded_roi.shape[:2], dtype=bool)
+                    
+                    # Exclude a larger region around the detection from background sampling
+                    exclusion_padding = 50  # Area to exclude around detection
+                    exclude_y1 = padding - exclusion_padding
+                    exclude_y2 = padding + h + exclusion_padding
+                    exclude_x1 = padding - exclusion_padding
+                    exclude_x2 = padding + w + exclusion_padding
+                    
+                    # Make sure exclusion coordinates are valid
+                    exclude_y1 = max(0, exclude_y1)
+                    exclude_y2 = min(padded_roi.shape[0], exclude_y2)
+                    exclude_x1 = max(0, exclude_x1)
+                    exclude_x2 = min(padded_roi.shape[1], exclude_x2)
+                    
+                    # Mark the exclusion zone in the mask
+                    bg_mask[exclude_y1:exclude_y2, exclude_x1:exclude_x2] = False
+                    
+                    # If we have enough background pixels, calculate average color
+                    if np.any(bg_mask):
+                        bg_color = np.mean(padded_roi[bg_mask], axis=0).astype(np.uint8)
+                    else:
+                        # Fallback to edges if we couldn't get enough background
+                        edge_samples = np.concatenate([
+                            padded_roi[0],  # Top edge
+                            padded_roi[-1],  # Bottom edge
+                            padded_roi[:, 0],  # Left edge
+                            padded_roi[:, -1]  # Right edge
+                        ])
+                        bg_color = np.mean(edge_samples, axis=0).astype(np.uint8)
+                    
+                    # Create base pixelated version (of the expanded region)
+                    temp = cv2.resize(frame[y1_expanded:y2_expanded, x1_expanded:x2_expanded], 
+                                   (6, 6), interpolation=cv2.INTER_LINEAR)
+                    pixelated = cv2.resize(temp, (w, h), interpolation=cv2.INTER_NEAREST)
+                    
+                    # Blend heavily towards background color
+                    blend_factor = 0.9  # Much stronger blend with background
+                    blended = cv2.addWeighted(
+                        pixelated, 1 - blend_factor,
+                        np.full((h, w, 3), bg_color, dtype=np.uint8), blend_factor,
+                        0
+                    )
+                    
+                    # Replace original ROI with blended version (using expanded coordinates)
+                    frame[y1_expanded:y2_expanded, x1_expanded:x2_expanded] = blended
                 elif box_style == "intense-pixelated-blur":
                     # Expand the bounding box by pixels in all directions
                     x1_expanded = max(0, x1 - 15)
@@ -1065,7 +1136,8 @@ def main():
     )
     parser.add_argument(
         "--box-style",
-        choices=["censor", "bounding-box", "hitmarker", "sam", "sam-fast", "fuzzy-blur", "pixelated-blur", "intense-pixelated-blur"],
+        choices=["censor", "bounding-box", "hitmarker", "sam", "sam-fast", "fuzzy-blur", 
+                "pixelated-blur", "intense-pixelated-blur", "obfuscated-pixel"],
         default="censor",
         help="Style of detection visualization (default: censor)",
     )
