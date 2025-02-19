@@ -15,6 +15,7 @@ Moondream is a tiny yet powerful vision-language model that can analyze images a
 - Can detect almost anything you can describe in natural language
 
 Links:
+
 - [GitHub Repository](https://github.com/vikhyat/moondream)
 - [Hugging Face](https://huggingface.co/vikhyatk/moondream2)
 - [Build with Moondream](http://docs.moondream.ai/)
@@ -48,11 +49,13 @@ Links:
 ## Requirements
 
 ### Python Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
 Key dependencies include:
+
 - Python 3.8+
 - PyTorch 2.0+ (with CUDA support recommended)
 - Transformers 4.36+
@@ -67,17 +70,20 @@ Key dependencies include:
 - Segment Anything Model (SAM) dependencies
 
 ### System Requirements
+
 - FFmpeg (required for video processing)
 - libvips (required for image processing)
 
 Installation by platform:
+
 - Ubuntu/Debian: `sudo apt-get install ffmpeg libvips`
 - macOS: `brew install ffmpeg libvips`
-- Windows: 
+- Windows:
   - Download FFmpeg from [ffmpeg.org](https://ffmpeg.org/download.html)
   - Follow [libvips Windows installation guide](https://docs.moondream.ai/quick-start)
 
 ### Hardware Requirements
+
 - GPU recommended for faster processing (CUDA compatible)
 - Minimum 8GB RAM
 - Storage space for temporary files and output videos
@@ -85,6 +91,7 @@ Installation by platform:
 ## Installation
 
 1. Clone this repository and create a new virtual environment:
+
 ```bash
 git clone https://github.com/vikhyat/moondream/blob/main/recipes/promptable-video-redaction
 python -m venv .venv
@@ -92,13 +99,16 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
 2. Install Python dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
+
 3. Install ffmpeg and libvips:
    - On Ubuntu/Debian: `sudo apt-get install ffmpeg libvips`
    - On macOS: `brew install ffmpeg`
    - On Windows: Download from [ffmpeg.org](https://ffmpeg.org/download.html)
+
 > Downloading libvips for Windows requires some additional steps, see [here](https://docs.moondream.ai/quick-start)
 
 ## Usage
@@ -106,11 +116,12 @@ pip install -r requirements.txt
 ### Web Interface
 
 1. Start the web interface:
+
 ```bash
 python app.py
 ```
 
-2. Open the provided URL in your browser (typically http://localhost:7860)
+2. Open the provided URL in your browser (typically <http://localhost:7860>)
 
 3. Use the interface to:
    - Upload your video file
@@ -126,6 +137,7 @@ python app.py
 ### Command Line Interface
 
 1. Create an `inputs` directory and place your videos there:
+
 ```bash
 mkdir inputs
 # Copy your videos to the inputs directory
@@ -139,6 +151,7 @@ mkdir inputs
    - .webm
 
 3. Run the script with desired options:
+
 ```bash
 python main.py [options]
 ```
@@ -146,18 +159,22 @@ python main.py [options]
 ### Command Line Options
 
 - `--test`: Process only first 3 seconds (for testing settings)
+
 ```bash
 python main.py --test
 ```
 
 - `--preset`: Choose FFmpeg encoding preset (speed vs. quality)
+
 ```bash
 python main.py --preset ultrafast  # Fastest, lower quality
 python main.py --preset veryslow   # Slowest, highest quality
 ```
+
 Available presets: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
 
 - `--detect`: Specify what to detect (using natural language)
+
 ```bash
 python main.py --detect "person"  # Detect people
 python main.py --detect "red car"  # Detect red cars
@@ -165,6 +182,7 @@ python main.py --detect "person wearing a hat"  # Detect people with hats
 ```
 
 - `--box-style`: Choose visualization style
+
 ```bash
 python main.py --box-style censor      # Black boxes (default)
 python main.py --box-style bounding-box  # Boxes with labels
@@ -174,12 +192,14 @@ python main.py --box-style sam-fast    # Fast SAM segmentation
 ```
 
 - `--rows` and `--cols`: Enable grid-based detection
+
 ```bash
 python main.py --rows 2 --cols 2  # Split into 2x2 grid
 python main.py --rows 3 --cols 3  # Split into 3x3 grid
 ```
 
 Combine options as needed:
+
 ```bash
 python main.py --detect "person wearing sunglasses" --box-style bounding-box --test --preset fast --rows 2 --cols 2
 ```
@@ -204,6 +224,7 @@ The tool provides comprehensive visualization capabilities for analyzing detecti
    - Temporal pattern analysis
 
 To analyze detection data:
+
 ```bash
 python visualization.py path/to/detection_data.json
 ```
